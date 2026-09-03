@@ -149,12 +149,12 @@ test('configured groups exclude the state file even when its literal path is sel
   };
   const repository = createRepository(t, {
     'catchmydrift.config.json': `${JSON.stringify(config)}\n`,
-    '.catchmydrift-state.json': '{"version":1}\n',
+    '.catchmydrift-state.json': '{"version":1,"reviews":{}}\n',
     'docs/guide.md': '# Guide\n',
     'docs/source.txt': 'unchanged\n'
   });
 
-  writeFile(repository, '.catchmydrift-state.json', '{"version":2}\n');
+  writeFile(repository, '.catchmydrift-state.json', '{\n  "version": 1,\n  "reviews": {}\n}\n');
   const result = runCli([], repository);
 
   assertStatus(result, 0);
@@ -419,7 +419,7 @@ test('configured watched files are reported missing after every tracked-current-
 test('required configuration fields and semantic rule constraints are all exercised through the CLI', t => {
   const repository = createRepository(t, {
     'catchmydrift.config.json': '{}\n',
-    '.catchmydrift-state.json': '{"version":1}\n',
+    '.catchmydrift-state.json': '{"version":1,"reviews":{}}\n',
     'docs/guide.md': '# Guide\n',
     'source/service.txt': 'service\n'
   });
