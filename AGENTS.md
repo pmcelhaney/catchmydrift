@@ -2,7 +2,7 @@
 
 ## Current purpose and product invariants
 
-This repository is being renamed from `docdr`/`docdelta` to **catchmydrift**. It is a CommonJS, Node.js >= 22 command-line tool backed by Git. These are intended product requirements; do not describe them as already implemented unless the relevant code and tests prove that they are.
+**catchmydrift** is a CommonJS, Node.js >= 22 command-line tool backed by Git. These are intended product requirements; do not describe them as already implemented unless the relevant code and tests prove that they are.
 
 - With zero configuration, inspect every Git-tracked, lowercase `.md` file and relate it to all Git-tracked files in that file's directory subtree.
 - With configuration, support named include/exclude glob groups and arbitrary watched Git-tracked files.

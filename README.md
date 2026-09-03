@@ -235,18 +235,3 @@ more file arguments; `check` uses its optional positional root.
 | `0` | The check is healthy, or a review was recorded successfully. |
 | `1` | A watched file exceeded its threshold, is missing, or has a stale or invalid review approval/state. |
 | `2` | Command usage, root, configuration, or review-target validation failed. |
-
-## Migration from docdr / docdelta
-
-This is a clean rename to `catchmydrift`:
-
-- Invoke `catchmydrift`; there is no `docdr` binary.
-- The old README-only behavior is gone. The default is all tracked lowercase
-  `.md` files, and configuration supports non-Markdown watched files.
-- Use `--threshold`, spelled exactly that way. The old `--threshhold` spelling
-  is not supported.
-- `--skipMissing` is not supported. Missing configured literal watched paths
-  are reported as failures so they can be reviewed deliberately.
-
-Run `catchmydrift --help` in an installed consumer for the exact command help
-of that installed version.

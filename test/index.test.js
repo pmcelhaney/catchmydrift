@@ -243,7 +243,7 @@ test('help and version do not require a repository', () => {
   assert.match(help.stdout, /catchmydrift/i);
   assert.match(help.stdout, /--threshold/);
   assertSucceeded(version);
-  assert.equal(version.stdout.trim(), '1.0.0');
+  assert.equal(version.stdout.trim(), '0.0.1');
 });
 
 test('a staged related-file deletion contributes drift', t => {
