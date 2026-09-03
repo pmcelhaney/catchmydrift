@@ -1,20 +1,37 @@
 {
-  "name": "docdelta",
+  "name": "catchmydrift",
   "version": "1.0.0",
-  "description": "Gives your documentation a check-up",
+  "description": "Checks watched files for drift against related Git-tracked changes",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "lib",
+    "catchmydrift.schema.json",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test"
   },
   "author": "Patrick McElhaney",
   "license": "ISC",
-  "dependencies": {
-    "yargs": "^6.4.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pmcelhaney/catchmydrift.git"
   },
+  "bugs": {
+    "url": "https://github.com/pmcelhaney/catchmydrift/issues"
+  },
+  "homepage": "https://github.com/pmcelhaney/catchmydrift#readme",
   "bin": {
-    "docdr": "./index.js"
+    "catchmydrift": "./index.js"
   },
   "engines": {
-    "node": "> 7"
+    "node": ">=22"
+  },
+  "dependencies": {
+    "minimatch": "10.2.6"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }
