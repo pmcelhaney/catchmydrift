@@ -8,9 +8,6 @@
   },
   "author": "Patrick McElhaney",
   "license": "ISC",
-  "dependencies": {
-    "yargs": "^17.7.2"
-  },
   "bin": {
     "catchmydrift": "./index.js"
   },
