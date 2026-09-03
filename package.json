@@ -1,13 +1,27 @@
 {
   "name": "catchmydrift",
   "version": "1.0.0",
-  "description": "Checks documentation for drift against related Git-tracked changes",
+  "description": "Checks watched files for drift against related Git-tracked changes",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "lib",
+    "catchmydrift.schema.json",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test"
   },
   "author": "Patrick McElhaney",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pmcelhaney/catchmydrift.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pmcelhaney/catchmydrift/issues"
+  },
+  "homepage": "https://github.com/pmcelhaney/catchmydrift#readme",
   "bin": {
     "catchmydrift": "./index.js"
   },
