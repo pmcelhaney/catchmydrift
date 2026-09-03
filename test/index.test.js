@@ -363,11 +363,11 @@ test('a healthy result visibly reports the effective threshold', t => {
   assert.match(result.stdout, /threshold.*100|100.*threshold/i);
 });
 
-test('summaries distinguish healthy, singular, and plural document results', t => {
+test('summaries distinguish healthy, singular, and plural watched-file results', t => {
   const healthy = createRepository(t, { 'README.md': '# Root\n' });
   const healthyResult = runCli([], healthy);
   assertSucceeded(healthyResult);
-  assert.match(healthyResult.stdout, /Healthy: 1 Markdown file checked; no documents exceed/i);
+  assert.match(healthyResult.stdout, /Healthy: 1 watched file checked; no watched files exceed/i);
 
   const singular = createRepository(t, {
     'docs/README.md': '# Docs\n',
@@ -376,7 +376,7 @@ test('summaries distinguish healthy, singular, and plural document results', t =
   writeFile(singular, 'docs/service.txt', 'after\n');
   const singularResult = runCli([], singular);
   assertFailedForDrift(singularResult);
-  assert.match(singularResult.stdout, /1 Markdown file checked; 1 outdated document exceeds/i);
+  assert.match(singularResult.stdout, /1 watched file checked; 1 watched file exceeds/i);
 
   const plural = createRepository(t, {
     'a/README.md': '# A\n',
@@ -388,7 +388,7 @@ test('summaries distinguish healthy, singular, and plural document results', t =
   writeFile(plural, 'b/service.txt', 'after\n');
   const pluralResult = runCli([], plural);
   assertFailedForDrift(pluralResult);
-  assert.match(pluralResult.stdout, /2 Markdown files checked; 2 outdated documents exceed/i);
+  assert.match(pluralResult.stdout, /2 watched files checked; 2 watched files exceed/i);
 });
 
 test('a watched Markdown path with Git pathspec metacharacters has a literal baseline', t => {

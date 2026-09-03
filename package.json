@@ -13,5 +13,11 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "minimatch": "10.2.6"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }

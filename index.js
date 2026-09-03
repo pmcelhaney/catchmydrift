@@ -17,7 +17,9 @@ const {
 } = require('./lib/git');
 const {
   scanMarkdownDrift,
+  calculateDriftForRelatedPaths,
   calculateDrift,
+  hasSafeWorkingTreeEntry,
   countCurrentTextLines,
   countTextLines,
   isTextBuffer,
@@ -25,13 +27,22 @@ const {
   isRelatedTo,
   sumTextChanges
 } = require('./lib/drift');
+const {
+  ConfigError,
+  resolveConfigPath,
+  resolveConfiguredWatch
+} = require('./lib/config');
 
 const USAGE = `Usage: catchmydrift [check] [root] [options]
 
-Check Git-tracked Markdown files for drift against the tracked files below them.
+Check watched Git-tracked files for drift against their related tracked files.
+
+Without configuration, every Git-tracked lowercase .md file is watched and
+related to the Git-tracked files in its directory subtree.
 
 Options:
   --threshold <0-100>  Percent drift allowed before a check fails (default: 0)
+  --config <path>      Read configuration from a JSON file inside the scan root
   --help               Show this help message
   --version            Show the installed version`;
 
@@ -55,7 +66,8 @@ function parseThreshold(value) {
 
 function parseArguments(args) {
   const positionals = [];
-  let threshold = 0;
+  let threshold;
+  let config;
   let endOfOptions = false;
   let commandSeen = false;
 
@@ -80,6 +92,22 @@ function parseArguments(args) {
       threshold = parseThreshold(argument.slice('--threshold='.length));
       continue;
     }
+    if (!endOfOptions && argument === '--config') {
+      index += 1;
+      if (typeof args[index] !== 'string' || args[index].length === 0) {
+        throw new UsageError('--config requires a path.');
+      }
+      config = args[index];
+      continue;
+    }
+    if (!endOfOptions && argument.startsWith('--config=')) {
+      const value = argument.slice('--config='.length);
+      if (value.length === 0) {
+        throw new UsageError('--config requires a path.');
+      }
+      config = value;
+      continue;
+    }
     if (!endOfOptions && argument.startsWith('-')) {
       throw new UsageError(`Unknown option: ${argument}`);
     }
@@ -93,7 +121,7 @@ function parseArguments(args) {
     throw new UsageError('Expected at most one scan root.');
   }
 
-  return { threshold, root: positionals[0] };
+  return { threshold, thresholdProvided: threshold !== undefined, config, root: positionals[0] };
 }
 
 function displayPath(rootRelative, watchedPath) {
@@ -124,28 +152,110 @@ function writeScanOutput(results, scan, threshold, stdout) {
     }
   }
 
-  const checkedLabel = `${results.length} Markdown ${results.length === 1 ? 'file' : 'files'} checked`;
+  const checkedLabel = `${results.length} watched ${results.length === 1 ? 'file' : 'files'} checked`;
   if (failures === 0) {
-    stdout.write(`Healthy: ${checkedLabel}; no documents exceed the ${formatPercent(threshold)} threshold.\n`);
+    stdout.write(`Healthy: ${checkedLabel}; no watched files exceed the ${formatPercent(threshold)} threshold.\n`);
   } else {
     stdout.write(
-      `${checkedLabel}; ${failures} ${failures === 1 ? 'outdated document exceeds' : 'outdated documents exceed'} ` +
+      `${checkedLabel}; ${failures} ${failures === 1 ? 'watched file exceeds' : 'watched files exceed'} ` +
       `the ${formatPercent(threshold)} threshold.\n`
     );
   }
 }
 
-function check(root, threshold) {
+function writeConfiguredScanOutput(results, scan, stdout) {
+  let failures = 0;
+  for (const result of results) {
+    const watchedPath = displayPath(scan.rootRelative, result.watchedPath);
+    if (result.missing) {
+      failures += 1;
+      stdout.write(`missing: ${watchedPath} (threshold ${formatPercent(result.threshold)})\n`);
+      continue;
+    }
+    if (result.warning) {
+      stdout.write(`warning: ${watchedPath}: ${result.warning}\n`);
+    }
+    if (result.percent > result.threshold) {
+      failures += 1;
+    }
+    stdout.write(`${formatPercent(result.percent)} (threshold ${formatPercent(result.threshold)}) ${watchedPath}\n`);
+  }
+
+  const checkedLabel = `${results.length} watched ${results.length === 1 ? 'file' : 'files'} checked`;
+  if (failures === 0) {
+    stdout.write(`Healthy: ${checkedLabel}; no watched files exceed their effective thresholds.\n`);
+  } else {
+    const failureDescription = failures === 1
+      ? 'watched file is missing or exceeds'
+      : 'watched files are missing or exceed';
+    const thresholdPossessive = failures === 1 ? 'its' : 'their';
+    stdout.write(
+      `${checkedLabel}; ${failures} ${failureDescription} ${thresholdPossessive} effective thresholds.\n`
+    );
+  }
+}
+
+function check(root, options = {}) {
+  const normalizedOptions = typeof options === 'number' ? { threshold: options, thresholdProvided: true } : options;
   const scan = normalizeScanRoot(root);
   const indexPaths = listIndexFiles(scan.repositoryRoot, scan.rootRelative);
   const trackedPaths = listTrackedFiles(scan.repositoryRoot, scan.rootRelative);
-  const results = scanMarkdownDrift(scan.scanRoot, scan.repositoryRoot, trackedPaths, indexPaths);
+  const loadedConfiguration = resolveConfigPath(scan.scanRoot, normalizedOptions.config, normalizedOptions.cwd || process.cwd());
+  if (loadedConfiguration === null) {
+    const threshold = normalizedOptions.threshold === undefined ? 0 : normalizedOptions.threshold;
+    const results = scanMarkdownDrift(scan.scanRoot, scan.repositoryRoot, trackedPaths, indexPaths);
+    return {
+      scan,
+      indexPaths,
+      trackedPaths,
+      results,
+      threshold,
+      configured: false,
+      failed: results.some(result => result.percent > threshold)
+    };
+  }
+
+  const rules = resolveConfiguredWatch(scan, loadedConfiguration.config, trackedPaths);
+  const results = [];
+  const indexPathSet = new Set(indexPaths);
+  for (const rule of rules) {
+    const threshold = normalizedOptions.thresholdProvided
+      ? normalizedOptions.threshold
+      : rule.threshold;
+    for (const scanRelativeWatchedPath of rule.watchedPaths) {
+      const watchedPath = scan.rootRelative === '.'
+        ? scanRelativeWatchedPath
+        : `${scan.rootRelative}/${scanRelativeWatchedPath}`;
+      if (
+        !rule.historicalPaths.has(watchedPath) ||
+        !indexPathSet.has(watchedPath) ||
+        !hasSafeWorkingTreeEntry(scan.scanRoot, scan.repositoryRoot, watchedPath)
+      ) {
+        results.push({ watchedPath, missing: true, threshold });
+        continue;
+      }
+      results.push({
+        ...calculateDriftForRelatedPaths(
+          scan.scanRoot,
+          scan.repositoryRoot,
+          watchedPath,
+          rule.relatedPaths,
+          indexPaths
+        ),
+        threshold,
+        missing: false
+      });
+    }
+  }
+  results.sort((left, right) => left.watchedPath < right.watchedPath ? -1 : left.watchedPath > right.watchedPath ? 1 : 0);
   return {
     scan,
     indexPaths,
     trackedPaths,
     results,
-    failed: results.some(result => result.percent > threshold)
+    configuration: loadedConfiguration,
+    configured: true,
+    failed: results.some(result => result.missing || result.percent > result.threshold)
   };
 }
 
@@ -166,8 +276,17 @@ function main(args = process.argv.slice(2), options = {}) {
     }
 
     const root = parsed.root ? path.resolve(cwd, parsed.root) : cwd;
-    const result = check(root, parsed.threshold);
-    writeScanOutput(result.results, result.scan, parsed.threshold, stdout);
+    const result = check(root, {
+      threshold: parsed.threshold,
+      thresholdProvided: parsed.thresholdProvided,
+      config: parsed.config,
+      cwd
+    });
+    if (result.configured) {
+      writeConfiguredScanOutput(result.results, result.scan, stdout);
+    } else {
+      writeScanOutput(result.results, result.scan, result.threshold, stdout);
+    }
     return result.failed ? 1 : 0;
   } catch (error) {
     if (error instanceof UsageError) {
@@ -193,6 +312,7 @@ module.exports = {
   displayPath,
   formatPercent,
   writeScanOutput,
+  writeConfiguredScanOutput,
   check,
   main,
   OperationalError,
@@ -200,7 +320,9 @@ module.exports = {
   listIndexFiles,
   listTrackedFiles,
   scanMarkdownDrift,
+  calculateDriftForRelatedPaths,
   calculateDrift,
+  hasSafeWorkingTreeEntry,
   countTextLines,
   isTextBuffer,
   isMarkdownPath,
@@ -210,5 +332,8 @@ module.exports = {
   baselineForPath,
   diffNumstat,
   diffAttributesForPaths,
-  EMPTY_TREE_HASH
+  EMPTY_TREE_HASH,
+  ConfigError,
+  resolveConfigPath,
+  resolveConfiguredWatch
 };

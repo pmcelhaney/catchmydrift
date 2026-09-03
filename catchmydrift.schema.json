@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "catchmydrift configuration",
+  "description": "Configuration for grouping related Git-tracked files and defining watched inputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0
+    },
+    "groups": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[\\s\\S]+$": {
+          "$ref": "#/$defs/group"
+        }
+      }
+    },
+    "watch": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/watch"
+      }
+    }
+  },
+  "required": [
+    "groups",
+    "watch"
+  ],
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rootRelativePosixGlob": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![\\s\\S]*\\u0000)(?!/)(?![A-Za-z]:[\\\\/])(?!\\\\\\\\)(?!\\.\\.(?:/|$))(?![\\s\\S]*?/\\.\\.(?:/|$))[\\s\\S]+$"
+    },
+    "globArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rootRelativePosixGlob"
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/globArray"
+            },
+            {
+              "type": "array",
+              "minItems": 1
+            }
+          ]
+        },
+        "exclude": {
+          "$ref": "#/$defs/globArray",
+          "default": []
+        }
+      },
+      "required": [
+        "include"
+      ]
+    },
+    "watch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/globArray"
+            },
+            {
+              "type": "array",
+              "minItems": 1
+            }
+          ]
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "exclude": {
+          "$ref": "#/$defs/globArray",
+          "default": []
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "include",
+        "groups"
+      ]
+    }
+  }
+}
