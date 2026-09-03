@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-const argv = require('yargs').argv;
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
 const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -61,28 +62,39 @@ function percentFormat(n) {
 }
 
 function main() {
+  const argv = yargs(hideBin(process.argv))
+    .scriptName('catchmydrift')
+    .usage('$0 [root]')
+    .option('threshold', {
+      describe: 'Percent change allowed before a README is considered outdated',
+      type: 'number',
+      default: 0
+    })
+    .strictOptions()
+    .help()
+    .version()
+    .parse();
   const rootPath = argv._[0] || process.cwd();
-  const skipMissing = argv.skipMissing;
-  const threshhold = parseFloat(argv.threshhold, 10) || 0;
+  const threshold = argv.threshold;
   const directories = getDirectoriesRecursive(rootPath);
 
   let missingCount = 0;
   let outdatedCount = 0;
 
-  process.stdout.write('Checking on the health of README.md files... ')
+  process.stdout.write('Checking README.md files for drift... ')
 
   directories.forEach(directory => {
     const result = checkDirectory(directory);
 
     const directoryName = `.${directory.slice(rootPath.length)}`;
 
-    if (result.missing && !skipMissing) {
+    if (result.missing) {
       missingCount++;
       process.stdout.write(`\n      ! ${directoryName}`);
       return;
     }
 
-    if (result.score > threshhold / 100) {
+    if (result.score > threshold / 100) {
       outdatedCount++;
       process.stdout.write(`\n${percentFormat(result.score)} ${directoryName}`);
     }

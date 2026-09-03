@@ -1,7 +1,7 @@
 {
-  "name": "docdelta",
+  "name": "catchmydrift",
   "version": "1.0.0",
-  "description": "Gives your documentation a check-up",
+  "description": "Checks documentation for drift against related Git-tracked changes",
   "main": "index.js",
   "scripts": {
     "test": "node --test"
@@ -9,12 +9,12 @@
   "author": "Patrick McElhaney",
   "license": "ISC",
   "dependencies": {
-    "yargs": "^6.4.0"
+    "yargs": "^17.7.2"
   },
   "bin": {
-    "docdr": "./index.js"
+    "catchmydrift": "./index.js"
   },
   "engines": {
-    "node": "> 7"
+    "node": ">=22"
   }
 }
