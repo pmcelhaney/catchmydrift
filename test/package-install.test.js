@@ -81,7 +81,7 @@ test('the packed package installs locally and its installed CLI covers check, co
     packInstalledDependency(path.join(packageRoot, 'node_modules/balanced-match'), packages)
   ];
 
-  assert.deepEqual(packedApplication.files, [
+  const expectedFiles = [
     'LICENSE',
     'README.md',
     'catchmydrift.schema.json',
@@ -91,7 +91,12 @@ test('the packed package installs locally and its installed CLI covers check, co
     'lib/git.js',
     'lib/review-state.js',
     'package.json'
-  ]);
+  ];
+  // Changesets creates the packaged changelog on the first release.
+  if (fs.existsSync(path.join(packageRoot, 'CHANGELOG.md'))) {
+    expectedFiles.push('CHANGELOG.md');
+  }
+  assert.deepEqual(packedApplication.files, expectedFiles.sort());
   for (const packedPath of packedApplication.files) {
     assert.doesNotMatch(packedPath, /(^|\/)(?:AGENTS\.md|test|docdr|docdelta)(?:\/|$)/i);
   }

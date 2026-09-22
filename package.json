@@ -7,10 +7,14 @@
     "index.js",
     "lib",
     "catchmydrift.schema.json",
+    "CHANGELOG.md",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "changeset": "changeset",
+    "release:version": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+    "release": "changeset publish"
   },
   "author": "Patrick McElhaney",
   "license": "ISC",
@@ -32,6 +36,7 @@
     "minimatch": "10.2.6"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "ajv": "8.20.0"
   }
 }

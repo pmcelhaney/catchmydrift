@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["npm", "github-actions"],
+  "rangeStrategy": "pin",
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Keep the supported Node.js minimum a deliberate product decision",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["engines"],
+      "enabled": false
+    },
+    {
+      "description": "Runtime dependency updates need a release note before merging",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies"],
+      "prBodyNotes": ["Add a catchmydrift changeset with `npm run changeset` before merging this runtime dependency update."]
+    }
+  ]
+}
