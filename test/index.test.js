@@ -116,6 +116,20 @@ test('insertions and deletions use current related text lines, with equality all
   assertFailedForDrift(runCli(['--threshold', '99'], repository));
 });
 
+test('zero-config checks default to a 20 percent drift threshold', t => {
+  const repository = createRepository(t, {
+    'docs/README.md': '# Docs\n',
+    'docs/service.txt': 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n'
+  });
+
+  writeFile(repository, 'docs/service.txt', 'ONE\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\n');
+
+  const result = runCli([], repository);
+
+  assertSucceeded(result);
+  assert.match(result.stdout, /20\.00% threshold/);
+});
+
 test('ignored and untracked files do not create drift', t => {
   const repository = createRepository(t, {
     '.gitignore': 'ignored.txt\n',

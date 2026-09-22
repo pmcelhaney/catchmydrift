@@ -31,6 +31,15 @@ function packPackage(directory, destination, cache) {
   };
 }
 
+function packInstalledDependency(directory, destination) {
+  const staging = path.join(destination, `${path.basename(directory)}-staging`);
+  fs.mkdirSync(staging, { recursive: true });
+  fs.cpSync(directory, path.join(staging, 'package'), { recursive: true });
+  const tarball = path.join(destination, `${path.basename(directory)}.tgz`);
+  execFileSync('tar', ['-czf', tarball, '-C', staging, 'package']);
+  return tarball;
+}
+
 function runInstalledCli(binary, args, cwd) {
   return spawnSync(binary, args, { cwd, encoding: 'utf8' });
 }
@@ -67,9 +76,9 @@ test('the packed package installs locally and its installed CLI covers check, co
 
   const packedApplication = packPackage(packageRoot, packages, cache);
   const packedDependencies = [
-    packPackage(path.join(packageRoot, 'node_modules/minimatch'), packages, cache),
-    packPackage(path.join(packageRoot, 'node_modules/brace-expansion'), packages, cache),
-    packPackage(path.join(packageRoot, 'node_modules/balanced-match'), packages, cache)
+    packInstalledDependency(path.join(packageRoot, 'node_modules/minimatch'), packages),
+    packInstalledDependency(path.join(packageRoot, 'node_modules/brace-expansion'), packages),
+    packInstalledDependency(path.join(packageRoot, 'node_modules/balanced-match'), packages)
   ];
 
   assert.deepEqual(packedApplication.files, [
@@ -91,9 +100,9 @@ test('the packed package installs locally and its installed CLI covers check, co
   fs.mkdirSync(consumer, { recursive: true });
   const dependencies = Object.fromEntries([
     ['catchmydrift', packedApplication.tarball],
-    ['minimatch', packedDependencies[0].tarball],
-    ['brace-expansion', packedDependencies[1].tarball],
-    ['balanced-match', packedDependencies[2].tarball]
+    ['minimatch', packedDependencies[0]],
+    ['brace-expansion', packedDependencies[1]],
+    ['balanced-match', packedDependencies[2]]
   ].map(([name, tarball]) => [name, `file:${tarball}`]));
   writeFile(consumer, 'package.json', `${JSON.stringify({ private: true, dependencies }, null, 2)}\n`);
   execFileSync('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], {

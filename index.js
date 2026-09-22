@@ -61,7 +61,7 @@ Without configuration, every Git-tracked lowercase .md file is watched and
 related to the Git-tracked files in its directory subtree.
 
 Options:
-  --threshold <0-100>  Percent drift allowed before a check fails (default: 0)
+  --threshold <0-100>  Percent drift allowed before a check fails (default: 20)
   --root <root>         Select the scan root for review (default: current directory)
   --config <path>      Read configuration from a JSON file inside the scan root
   --help               Show this help message
@@ -316,7 +316,7 @@ function resolveWatchPlan(root, options = {}) {
   const loadedState = loadState(scan);
   const indexPathSet = new Set(indexPaths);
   if (loadedConfiguration === null) {
-    const threshold = normalizedOptions.threshold === undefined ? 0 : normalizedOptions.threshold;
+    const threshold = normalizedOptions.threshold === undefined ? 20 : normalizedOptions.threshold;
     return {
       scan,
       indexPaths,
