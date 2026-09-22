@@ -1,6 +1,6 @@
 {
   "name": "catchmydrift",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Checks watched files for drift against related Git-tracked changes",
   "main": "index.js",
   "files": [
