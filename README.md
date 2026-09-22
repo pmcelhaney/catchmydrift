@@ -115,7 +115,7 @@ The effective threshold is chosen in this order:
 1. `--threshold` on the `check` command
 2. The watch rule's `threshold`
 3. The configuration's top-level `threshold`
-4. `0`
+4. `20`
 
 Each watched path may be selected by only one watch rule. A literal watched
 path that is no longer tracked is reported as missing; a wildcard or group

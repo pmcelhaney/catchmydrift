@@ -170,14 +170,14 @@ test('the configuration file can be both a watched file and a related file', t =
     'catchmydrift.config.json': `${JSON.stringify(config, null, 2)}\n`
   });
 
-  writeFile(repository, 'catchmydrift.config.json', `${JSON.stringify(config, null, 2)}\n\n`);
+  writeFile(repository, 'catchmydrift.config.json', `${JSON.stringify(config, null, 2)}\n\n\n\n\n\n`);
   const result = runCli([], repository);
 
   assertStatus(result, 1);
   assert.match(result.stdout, /catchmydrift\.config\.json/);
 });
 
-test('threshold precedence is command line, then watch rule, then top-level configuration, then zero', t => {
+test('threshold precedence is command line, then watch rule, then top-level configuration, then the default of 20', t => {
   const ruleThreshold = baseConfig({ threshold: 0 });
   ruleThreshold.watch[0].threshold = 100;
   const repository = createRepository(t, {
@@ -201,9 +201,9 @@ test('threshold precedence is command line, then watch rule, then top-level conf
 
   delete topLevelConfig.threshold;
   writeConfig(repository, topLevelConfig);
-  const implicitZero = runCli([], repository);
-  assertStatus(implicitZero, 1);
-  assert.match(implicitZero.stdout, /threshold 0\.00%/);
+  const implicitDefault = runCli([], repository);
+  assertStatus(implicitDefault, 1);
+  assert.match(implicitDefault.stdout, /threshold 20\.00%/);
 });
 
 test('an exact missing watched literal is unhealthy while an unmatched watched wildcard is a configuration error', t => {
@@ -411,7 +411,7 @@ test('configured watched files are reported missing after every tracked-current-
     const result = runCli([], repository);
 
     assertStatus(result, 1);
-    assert.match(result.stdout, /missing: docs\/guide\.md \(threshold 0\.00%\)/);
+    assert.match(result.stdout, /missing: docs\/guide\.md \(threshold 20\.00%\)/);
     assert.match(result.stdout, /1 watched file checked; 1 watched file is missing/i, fixture.name);
   }
 });
