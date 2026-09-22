@@ -1,13 +1,17 @@
 # catchmydrift
 
-`catchmydrift` is a Git-backed command-line check for keeping related files in
-sync. Out of the box, it finds drift in Markdown documentation. With a small
-JSON configuration, it can watch **any Git-tracked file**—for example,
-`AGENTS.md`, runbooks, skill instructions, configuration, or source-adjacent
-notes—and relate it to the groups of files that should keep it current.
+`catchmydrift` is a Git-backed command-line check that reminds busy engineers to keep documentation up to date.
+It works by making sure each context / documentation file is updated when the code files it supports have drifted.
 
-The command reads Git history plus staged and unstaged tracked changes. It
-never changes the files it checks.
+Out of the box, it validates that the code has not drifted more than 20% since `AGENTS.md`, `README.md`, and other markdown files were last updated.
+
+That percentage, as well as the relationship between files-that-drift and files-that-should-be-updated, can be customized with a small configuration file.
+
+- The command is **deterministic**.
+- It is does not change anything.
+- It does not try to understand what changed; it simply alerts that change has occurred.
+- It prints a brief report and returns a pass / fail exit code.
+- It can be used by people, agents, or CI.
 
 ## Install and run
 
@@ -230,8 +234,8 @@ catchmydrift --version
 `check` is the default command. `review` uses `--root` because it has one or
 more file arguments; `check` uses its optional positional root.
 
-| Exit status | Meaning |
-| --- | --- |
-| `0` | The check is healthy, or a review was recorded successfully. |
-| `1` | A watched file exceeded its threshold, is missing, or has a stale or invalid review approval/state. |
-| `2` | Command usage, root, configuration, or review-target validation failed. |
+| Exit status | Meaning                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| `0`         | The check is healthy, or a review was recorded successfully.                                        |
+| `1`         | A watched file exceeded its threshold, is missing, or has a stale or invalid review approval/state. |
+| `2`         | Command usage, root, configuration, or review-target validation failed.                             |
