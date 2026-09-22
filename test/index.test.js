@@ -4,6 +4,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const packageManifest = require('../package.json');
 
 const cliEntryPoint = path.resolve(__dirname, '..', 'index.js');
 
@@ -257,7 +258,7 @@ test('help and version do not require a repository', () => {
   assert.match(help.stdout, /catchmydrift/i);
   assert.match(help.stdout, /--threshold/);
   assertSucceeded(version);
-  assert.equal(version.stdout.trim(), '0.0.1');
+  assert.equal(version.stdout.trim(), packageManifest.version);
 });
 
 test('a staged related-file deletion contributes drift', t => {
