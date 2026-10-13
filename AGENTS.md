@@ -8,7 +8,7 @@
 - With configuration, support named include/exclude glob groups and arbitrary watched Git-tracked files.
 - Calculate drift as `(inserted text lines + deleted text lines) / current related text lines`.
 - Ignore binary files in v1.
-- A review must bind to the normalized relationship definition and the exact tracked working-tree content that was reviewed. It may atomically update only `.catchmydrift-state.json`; it must not modify, touch, stage, or commit watched files or any other path.
+- A review records the current HEAD commit SHA for each selected watched file and requires its watched and related tracked content to have no staged or unstaged changes. State is an unversioned document-path-to-commit-SHA map; relationships are resolved from the current configuration. It may atomically update only `.catchmydrift-state.json`; it must not modify, touch, stage, or commit watched files or any other path.
 - Keep Git interaction safe: use discrete argument arrays (never shell-built Git commands), constrain user-supplied paths to the selected scan root (which must be inside a Git repository), and make command output and state deterministic.
 - Exclude `.catchmydrift-state.json` itself from watched/related content.
 - Tests use `node:test` and temporary, real Git repositories.

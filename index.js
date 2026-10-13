@@ -37,7 +37,6 @@ const {
   ConfigError,
   resolveConfigPath,
   resolveConfiguredWatch,
-  relationshipSignature,
   matchesConfiguredRelationship,
   scanRelativePath
 } = require('./lib/config');
@@ -45,11 +44,7 @@ const {
   STATE_FILENAME,
   StateHealthError,
   loadState,
-  createReviewEntry,
-  writeStateAtomically,
-  findTokenCommit,
-  verifyPendingSnapshot,
-  verifyCommittedSnapshot
+  writeStateAtomically
 } = require('./lib/review-state');
 
 const USAGE = `Usage: catchmydrift [check] [root] [options]
@@ -226,7 +221,6 @@ function formatPercent(percent) {
 
 function writeScanOutput(results, scan, threshold, stdout) {
   let failures = 0;
-  let approvalFailures = 0;
   for (const result of results) {
     const watchedPath = displayPath(scan.rootRelative, result.watchedPath);
     if (result.missing) {
@@ -237,12 +231,6 @@ function writeScanOutput(results, scan, threshold, stdout) {
     if (result.warning) {
       stdout.write(`warning: ${watchedPath}: ${result.warning}\n`);
     }
-    if (result.approvalFailure) {
-      failures += 1;
-      approvalFailures += 1;
-      stdout.write(`${result.approvalFailure}: ${watchedPath}: ${result.approvalMessage}\n`);
-      continue;
-    }
     if (result.percent > threshold) {
       failures += 1;
       stdout.write(`${formatPercent(result.percent)} (threshold ${formatPercent(threshold)}) ${watchedPath}\n`);
@@ -252,10 +240,6 @@ function writeScanOutput(results, scan, threshold, stdout) {
   const checkedLabel = `${results.length} watched ${results.length === 1 ? 'file' : 'files'} checked`;
   if (failures === 0) {
     stdout.write(`Healthy: ${checkedLabel}; no watched files exceed the ${formatPercent(threshold)} threshold.\n`);
-  } else if (approvalFailures > 0) {
-    stdout.write(
-      `${checkedLabel}; ${failures} ${failures === 1 ? 'watched file failed' : 'watched files failed'} the check.\n`
-    );
   } else {
     stdout.write(
       `${checkedLabel}; ${failures} ${failures === 1 ? 'watched file exceeds' : 'watched files exceed'} ` +
@@ -266,7 +250,6 @@ function writeScanOutput(results, scan, threshold, stdout) {
 
 function writeConfiguredScanOutput(results, scan, stdout) {
   let failures = 0;
-  let approvalFailures = 0;
   for (const result of results) {
     const watchedPath = displayPath(scan.rootRelative, result.watchedPath);
     if (result.missing) {
@@ -277,12 +260,6 @@ function writeConfiguredScanOutput(results, scan, stdout) {
     if (result.warning) {
       stdout.write(`warning: ${watchedPath}: ${result.warning}\n`);
     }
-    if (result.approvalFailure) {
-      failures += 1;
-      approvalFailures += 1;
-      stdout.write(`${result.approvalFailure}: ${watchedPath}: ${result.approvalMessage}\n`);
-      continue;
-    }
     if (result.percent > result.threshold) {
       failures += 1;
     }
@@ -292,10 +269,6 @@ function writeConfiguredScanOutput(results, scan, stdout) {
   const checkedLabel = `${results.length} watched ${results.length === 1 ? 'file' : 'files'} checked`;
   if (failures === 0) {
     stdout.write(`Healthy: ${checkedLabel}; no watched files exceed their effective thresholds.\n`);
-  } else if (approvalFailures > 0) {
-    stdout.write(
-      `${checkedLabel}; ${failures} ${failures === 1 ? 'watched file failed' : 'watched files failed'} the check.\n`
-    );
   } else {
     const failureDescription = failures === 1
       ? 'watched file is missing or exceeds'
@@ -334,7 +307,6 @@ function resolveWatchPlan(root, options = {}) {
           threshold,
           currentlyWatched: indexPathSet.has(watchedPath) && hasSafeWorkingTreeEntry(scan.scanRoot, scan.repositoryRoot, watchedPath),
           relationshipDefinition,
-          relationship: relationshipSignature(relationshipDefinition),
           matchesRelationship: candidatePath => matchesDefaultRelationship(relationshipDefinition, candidatePath)
         };
       })
@@ -342,11 +314,8 @@ function resolveWatchPlan(root, options = {}) {
   }
 
   const configuredCandidatePaths = new Set(trackedPaths);
-  for (const [watchedPath, reviewEntry] of Object.entries(loadedState.state.reviews)) {
+  for (const watchedPath of Object.keys(loadedState.state)) {
     configuredCandidatePaths.add(watchedPath);
-    for (const file of reviewEntry.files) {
-      configuredCandidatePaths.add(file.path);
-    }
   }
   const rules = resolveConfiguredWatch(
     scan,
@@ -371,7 +340,6 @@ function resolveWatchPlan(root, options = {}) {
           indexPathSet.has(watchedPath) &&
           hasSafeWorkingTreeEntry(scan.scanRoot, scan.repositoryRoot, watchedPath),
         relationshipDefinition: rule.relationshipDefinition,
-        relationship: rule.relationship,
         matchesRelationship: candidatePath => matchesConfiguredRelationship(
           rule.relationshipDefinition,
           scanRelativePath(scan.rootRelative, candidatePath)
@@ -395,62 +363,10 @@ function resultForPlanEntry(plan, planEntry, stateEntry) {
   if (!planEntry.currentlyWatched && plan.configured) {
     return { watchedPath: planEntry.watchedPath, missing: true, threshold: planEntry.threshold };
   }
-  let warning = null;
-  let baseline;
-  if (stateEntry && stateEntry.relationship !== planEntry.relationship) {
-    warning = 'The saved review relationship changed; the approval was ignored.';
-    stateEntry = null;
-  }
-  if (stateEntry) {
-    let reviewCommit;
-    try {
-      reviewCommit = findTokenCommit(plan.scan, planEntry.watchedPath, stateEntry);
-      if (reviewCommit === null) {
-        if (!verifyPendingSnapshot(plan.scan, planEntry, stateEntry)) {
-          return {
-            watchedPath: planEntry.watchedPath,
-            threshold: planEntry.threshold,
-            approvalFailure: 'stale approval',
-            approvalMessage: 'the reviewed working-tree snapshot has changed'
-          };
-        }
-        return {
-          watchedPath: planEntry.watchedPath,
-          threshold: planEntry.threshold,
-          percent: 0,
-          warning: null,
-          pendingApproval: true
-        };
-      }
-      if (!verifyCommittedSnapshot(plan.scan, planEntry, stateEntry, reviewCommit)) {
-        return {
-          watchedPath: planEntry.watchedPath,
-          threshold: planEntry.threshold,
-          approvalFailure: 'invalid approval',
-          approvalMessage: `the saved snapshot does not match review commit ${reviewCommit}`
-        };
-      }
-      const watchedBaseline = baselineForPath(plan.scan.repositoryRoot, planEntry.watchedPath);
-      baseline = selectNewerCommit(
-        plan.scan.repositoryRoot,
-        [reviewCommit, watchedBaseline]
-      );
-      if (baseline === watchedBaseline && watchedBaseline !== reviewCommit) {
-        warning = 'A later watched-file commit superseded the saved review baseline.';
-      }
-    } catch (error) {
-      if (error instanceof StateHealthError) {
-        return {
-          watchedPath: planEntry.watchedPath,
-          threshold: planEntry.threshold,
-          approvalFailure: 'invalid approval',
-          approvalMessage: error.message
-        };
-      }
-      throw error;
-    }
-  }
-  const effectiveBaseline = baseline || baselineForPath(plan.scan.repositoryRoot, planEntry.watchedPath);
+  const watchedBaseline = baselineForPath(plan.scan.repositoryRoot, planEntry.watchedPath);
+  const effectiveBaseline = stateEntry
+    ? selectNewerCommit(plan.scan.repositoryRoot, [stateEntry, watchedBaseline])
+    : watchedBaseline;
   const baselineRelatedPaths = effectiveBaseline === EMPTY_TREE_HASH
     ? []
     : listTreeEntries(plan.scan.repositoryRoot, effectiveBaseline, plan.scan.rootRelative)
@@ -469,7 +385,7 @@ function resultForPlanEntry(plan, planEntry, stateEntry) {
     ...drift,
     threshold: planEntry.threshold,
     missing: false,
-    warning: warning || drift.warning
+    warning: drift.warning
   };
 }
 
@@ -478,12 +394,12 @@ function check(root, options = {}) {
   const results = plan.entries.map(entry => resultForPlanEntry(
     plan,
     entry,
-    plan.loadedState.state.reviews[entry.watchedPath]
+    plan.loadedState.state[entry.watchedPath]
   ));
   return {
     ...plan,
     results,
-    failed: results.some(result => result.missing || result.approvalFailure || result.percent > result.threshold)
+    failed: results.some(result => result.missing || result.percent > result.threshold)
   };
 }
 
@@ -522,11 +438,28 @@ function review(root, targets, options = {}) {
     }
     selected.push(entry);
   }
-  const reviews = Object.assign(Object.create(null), plan.loadedState.state.reviews);
-  for (const entry of selected) {
-    reviews[entry.watchedPath] = createReviewEntry(plan.scan, entry);
+  const head = runGit(['rev-parse', '--verify', 'HEAD'], plan.scan.repositoryRoot, { allowFailure: true });
+  if (head.status !== 0) {
+    throw new UsageError('Review requires a committed HEAD. Commit the watched and related files first.');
   }
-  const state = { version: 1, reviews };
+  const commit = head.stdout.toString('utf8').trim();
+  const paths = new Set(selected.flatMap(entry => [entry.watchedPath, ...entry.relatedPaths]));
+  for (const treeEntry of listTreeEntries(plan.scan.repositoryRoot, commit, plan.scan.rootRelative)) {
+    if (!isStatePath(treeEntry.path) && selected.some(entry => entry.matchesRelationship(treeEntry.path))) {
+      paths.add(treeEntry.path);
+    }
+  }
+  const status = runGit([
+    '--no-optional-locks', 'status', '--porcelain=v1', '-z', '--untracked-files=no',
+    '--ignore-submodules=none', '--', ...[...paths].sort()
+  ], plan.scan.repositoryRoot);
+  if (status.stdout.length > 0) {
+    throw new UsageError('Review requires committed watched and related content. Commit staged and unstaged changes first.');
+  }
+  const state = Object.assign(Object.create(null), plan.loadedState.state);
+  for (const entry of selected) {
+    state[entry.watchedPath] = commit;
+  }
   writeStateAtomically(plan.scan, state);
   return { scan: plan.scan, watchedPaths: selected.map(entry => entry.watchedPath).sort(), statePath: STATE_FILENAME };
 }
@@ -553,7 +486,7 @@ function main(args = process.argv.slice(2), options = {}) {
       for (const watchedPath of result.watchedPaths) {
         stdout.write(`Approved: ${displayPath(result.scan.rootRelative, watchedPath)}\n`);
       }
-      stdout.write(`Commit ${STATE_FILENAME} with the reviewed changes to make this approval persistent.\n`);
+      stdout.write(`Commit ${STATE_FILENAME} to share these review baselines with the repository.\n`);
       return 0;
     }
     const result = check(root, {
