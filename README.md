@@ -158,21 +158,28 @@ threshold is healthy; only a higher percentage fails.
 
 Binary files do not contribute to the line-based calculation in v1. A group
 containing only binary content therefore reports no text to measure rather
-than treating byte changes as line drift. Review snapshots (described below)
-still preserve binary and final-symlink content so that a reviewed snapshot
-cannot silently become stale.
+than treating byte changes as line drift. Reviews require binary and symlink
+changes to be committed too, even though binary content does not contribute to
+percentage drift.
 
 `.catchmydrift-state.json` is always excluded from watched and related
 content, even if a configuration glob would otherwise select it.
 
 ## Review a file without editing it
 
-Use `review` after you have assessed a watched file and its current related
-content. It marks that exact snapshot as current without changing the watched
-file:
+Use `review` after you have assessed a watched file against committed related
+content. It records the current `HEAD` commit SHA as that file's review baseline
+without editing the watched file:
 
 ```sh
+# Commit the changes you assessed first
+git add docs/service.js
+git commit -m "Update service"
 catchmydrift review docs/README.md
+
+# Share the review baseline
+git add .catchmydrift-state.json
+git commit -m "Record documentation review"
 
 # Review an arbitrary configured watched file
 catchmydrift review AGENTS.md --config catchmydrift.config.json
@@ -191,36 +198,45 @@ catchmydrift review <file...> [--root <root>] [--config <path>]
 Use `--` before a filename that begins with `-`. `--threshold` belongs only to
 `check`, not `review`.
 
-Review validates all supplied paths before it writes anything. It rejects
-paths outside the selected root, missing or unsafe working-tree paths, and
-paths that are not currently watched. A batch review is atomic: an invalid
-target does not leave a partial review state behind.
+Review requires an existing commit and rejects staged or unstaged changes in
+any selected watched file or its related tracked files, including additions,
+deletions, binary files, and symlinks. Unrelated dirty files and untracked files
+do not block a review. Review validates all targets before writing: an invalid
+or dirty target leaves the entire batch unchanged. Paths outside the selected
+root, missing or unsafe paths, and files that are not currently watched are
+rejected.
 
 On success, the only file it may create or update is
 `.catchmydrift-state.json` in the selected root. It does not modify, touch,
-stage, or commit the watched file or any other content. The state records a
-normalized relationship definition and the exact tracked working-tree snapshot
-that was reviewed. catchmydrift prints a reminder; stage and commit the state
-file together with the reviewed changes yourself if the approval should travel
-with the repository:
+stage, or commit watched files or other content. The state is an unversioned
+JSON object mapping repository-relative watched paths to full commit SHAs:
 
-```sh
-catchmydrift review docs/README.md
-git add docs/README.md docs/service.js .catchmydrift-state.json
-git commit -m "Review docs for service changes"
+```json
+{
+  "docs/README.md": "89b5d14c84a4a05e7d3e204cb16b587ef647dc19"
+}
 ```
 
-Before that commit, the local review is still useful: the check is healthy only
-while the exact reviewed snapshot remains in place. A related edit makes it a
-stale approval and fails the check regardless of the configured threshold;
-running `review` again records a new snapshot. Once committed, the review is
-portable to a fresh clone. If the relationship configuration changes,
-catchmydrift warns and ignores the old approval. A later commit that changes a
-watched file also supersedes its older review baseline.
+The format is defined by `catchmydrift-state.schema.json`, shipped with the
+package. Keys remain relative to the repository even when scanning a
+subdirectory. Each SHA must identify a commit reachable from the current
+`HEAD`. There is no version field, relationship signature, or file snapshot.
+The previous versioned snapshot format is unsupported; remove the old state
+file and run `review` again against committed content.
 
-Treat `.catchmydrift-state.json` as review evidence. Malformed, unsupported,
-or internally inconsistent review state is unhealthy rather than silently
-ignored.
+Without a saved review, drift starts at the last commit that changed the
+watched file. With a saved review, it starts at the newer of that commit and
+the review commit. A later watched-file update therefore supersedes an older
+review. Saved reviews work locally immediately and travel to fresh clones when
+the state file is committed. Repeating a review at the same `HEAD` produces
+identical state.
+
+Subsequent committed, staged, and unstaged related changes contribute ordinary
+percentage drift, subject to the threshold. Relationships always come from the
+current configuration; changing a relationship keeps the saved SHA as the
+baseline and applies the new relationship to it. Review state itself is
+excluded from drift. Malformed state, invalid paths, and SHAs that are missing,
+are not commits, or are not reachable from `HEAD` make the check unhealthy.
 
 ## Commands and exit status
 
@@ -237,5 +253,5 @@ more file arguments; `check` uses its optional positional root.
 | Exit status | Meaning                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------- |
 | `0`         | The check is healthy, or a review was recorded successfully.                                        |
-| `1`         | A watched file exceeded its threshold, is missing, or has a stale or invalid review approval/state. |
+| `1`         | A watched file exceeded its threshold, is missing, or has invalid review state. |
 | `2`         | Command usage, root, configuration, or review-target validation failed.                             |

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "catchmydrift review state",
+  "description": "Repository-relative watched file paths mapped to full reviewed commit SHAs. Commits must be reachable from HEAD; paths must be inside the selected scan root.",
+  "type": "object",
+  "propertyNames": {
+    "type": "string",
+    "minLength": 1,
+    "allOf": [
+      {
+        "pattern": "^(?!/)(?![\\s\\S]*\\u0000)(?![\\s\\S]*//)(?![\\s\\S]*/$)[\\s\\S]+$"
+      },
+      {
+        "not": {
+          "pattern": "(^|/)(\\.|\\.\\.)(/|$)"
+        }
+      },
+      {
+        "not": {
+          "pattern": "(^|/)\\.catchmydrift-state\\.json$"
+        }
+      }
+    ]
+  },
+  "additionalProperties": {
+    "type": "string",
+    "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})(?![\\s\\S])"
+  }
+}

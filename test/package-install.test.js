@@ -85,6 +85,7 @@ test('the packed package installs locally and its installed CLI covers check, co
     'LICENSE',
     'README.md',
     'catchmydrift.schema.json',
+    'catchmydrift-state.schema.json',
     'index.js',
     'lib/config.js',
     'lib/drift.js',
@@ -150,10 +151,14 @@ test('the packed package installs locally and its installed CLI covers check, co
   assertStatus(configuredDrift, 1);
   assert.match(configuredDrift.stdout, /instructions\/manual\.txt/);
 
+  assertStatus(runInstalledCli(binary, ['review', 'instructions/manual.txt'], repository), 2);
+  commitAll(repository, 'commit reviewed source');
+  const reviewedHead = runGit(repository, ['rev-parse', 'HEAD']).trim();
   const review = runInstalledCli(binary, ['review', 'instructions/manual.txt', '--root', repository], repository);
   assertStatus(review, 0);
   assert.match(review.stdout, /Approved: instructions\/manual\.txt/);
   assert.equal(fs.existsSync(path.join(repository, '.catchmydrift-state.json')), true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(repository, '.catchmydrift-state.json'), 'utf8')), { 'instructions/manual.txt': reviewedHead });
   assertStatus(runInstalledCli(binary, ['check'], repository), 0);
   commitAll(repository, 'persist reviewed configuration and source');
   assertStatus(runInstalledCli(binary, ['check'], repository), 0);

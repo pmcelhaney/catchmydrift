@@ -217,13 +217,13 @@ test('the explicit check command is equivalent to the default command', t => {
 
 test('the state file is excluded even when it is tracked and changed', t => {
   const repository = createRepository(t, {
-    '.catchmydrift-state.json': '{"version":1,"reviews":{}}\n',
+    '.catchmydrift-state.json': '{}\n',
     'README.md': '# Root\n',
     'docs/README.md': '# Docs\n',
     'docs/service.js': 'unchanged\n'
   });
 
-  writeFile(repository, '.catchmydrift-state.json', '{\n  "version": 1,\n  "reviews": {}\n}\n');
+  writeFile(repository, '.catchmydrift-state.json', '{\n}\n');
   const result = runCli([], repository);
 
   assertSucceeded(result);
