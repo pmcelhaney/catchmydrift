@@ -39,7 +39,7 @@ function createRepository(t, files = {}) {
 }
 
 function runCli(args, cwd) {
-  return spawnSync(process.execPath, [cliEntryPoint, ...args], { cwd, encoding: 'utf8' });
+  return spawnSync(process.execPath, [cliEntryPoint, ...args], { cwd, encoding: 'utf8', env: { ...process.env, CATCHMYDRIFT_NO_UPDATE_CHECK: '1' } });
 }
 
 function assertStatus(result, expected) {

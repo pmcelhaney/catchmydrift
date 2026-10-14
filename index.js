@@ -4,6 +4,7 @@
 
 const path = require('node:path');
 const packageJson = require('./package.json');
+const { warnIfOutdated } = require('./lib/update-check');
 const {
   OperationalError,
   normalizeScanRoot,
@@ -516,8 +517,28 @@ function main(args = process.argv.slice(2), options = {}) {
   }
 }
 
+async function runCli(args = process.argv.slice(2), options = {}) {
+  // Keep the synchronous programmatic API and help/usage paths offline.
+  let parsed;
+  try {
+    parsed = parseArguments(args);
+  } catch {
+    return main(args, options);
+  }
+  const status = main(args, options);
+  if (!parsed.help && !parsed.version) {
+    await warnIfOutdated({
+      installedVersion: packageJson.version,
+      stderr: options.stderr || process.stderr,
+      env: options.env || process.env,
+      lookup: options.lookupLatestVersion
+    });
+  }
+  return status;
+}
+
 if (require.main === module) {
-  process.exitCode = main();
+  runCli().then(status => { process.exitCode = status; });
 }
 
 module.exports = {
@@ -534,6 +555,7 @@ module.exports = {
   check,
   review,
   main,
+  runCli,
   OperationalError,
   normalizeScanRoot,
   listIndexFiles,
