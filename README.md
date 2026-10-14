@@ -7,7 +7,7 @@ Out of the box, it validates that the code has not drifted more than 20% since `
 
 That percentage, as well as the relationship between files-that-drift and files-that-should-be-updated, can be customized with a small configuration file.
 
-- The command is **deterministic**.
+- Drift results and exit codes are **deterministic**.
 - It is does not change anything.
 - It does not try to understand what changed; it simply alerts that change has occurred.
 - It prints a brief report and returns a pass / fail exit code.
@@ -29,6 +29,24 @@ Then run it from the repository root:
 ```sh
 npx catchmydrift
 ```
+
+On `check` and `review`, the CLI checks the public npm registry for the latest
+release. If it is newer than the running version, a warning on stderr shows both
+versions and these upgrade options:
+
+```sh
+npm install --save-dev catchmydrift@latest  # Project dependency
+npm install --global catchmydrift@latest   # Global installation
+npx catchmydrift@latest                   # One-off run
+```
+
+The lookup has a 1.5-second deadline. Network errors, invalid responses, and
+timeouts are silently ignored; the warning never changes drift results or exit
+codes. It writes no cache or other files and never upgrades automatically.
+Help, version output, and programmatic `main`, `check`, and `review` calls stay
+offline. CI environments (`CI` set to a nonempty value other than `false` or `0`)
+skip the lookup. Set `CATCHMYDRIFT_NO_UPDATE_CHECK=1` to disable it elsewhere,
+including when using a private registry or working offline.
 
 For continuous integration, add a script such as:
 
