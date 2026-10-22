@@ -1,5 +1,7 @@
 # catchmydrift
 
+<img src="docs/images/catch-my-drift-logo-b3-readme.png" alt="Catch My Drift — an angle-bracket kite with a curved tail" width="600">
+
 `catchmydrift` is a Git-backed command-line check that reminds busy engineers to keep documentation up to date.
 It works by making sure each context / documentation file is updated when the code files it supports have drifted.
 
