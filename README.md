@@ -257,3 +257,92 @@ more file arguments; `check` uses its optional positional root.
 | `0`         | The check is healthy, or a review was recorded successfully.                                        |
 | `1`         | A watched file exceeded its threshold, is missing, or has invalid review state. |
 | `2`         | Command usage, root, configuration, or review-target validation failed.                             |
+
+## GitHub Action
+
+Use this repository as a JavaScript Action to run the existing drift checks without installing npm dependencies in your project. It runs on Node 24 supplied by the Actions runner. The committed `dist/` bundle contains its dependencies. A full Git history is required: shallow checkouts can lose the documentation baseline and cause analysis to fail.
+
+Copy [the example workflow](examples/drift-workflow.yml) to `.github/workflows/drift.yml`, replacing `ACTION_COMMIT_SHA` with the full reviewed commit SHA containing this Action. No Action release tag has been published as part of this change.
+
+```yaml
+name: Documentation drift
+on: [pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pmcelhaney/catchmydrift@ACTION_COMMIT_SHA
+        id: drift
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.drift.outputs.report-directory != ''
+        with:
+          name: catchmydrift-review
+          path: ${{ steps.drift.outputs.report-directory }}
+          retention-days: 7
+```
+
+By default this runs offline, does not fail for drift, and needs only `contents: read`. Set `fail-on-drift: 'true'` to gate a job on the existing deterministic threshold. AI never overrides that result. The Action never commits, stages, updates review state, changes source files, opens a PR, merges, or runs repository scripts. It does not post PR comments and requires no write token. For private repositories, keep the report artifact accessible only to intended reviewers.
+
+### Opt-in AI review
+
+AI review is a bounded proposal for a human to assess. It can report `mismatch`, `no_change`, or `insufficient_evidence`; it does not certify documentation correctness. The initial provider is the OpenAI Chat Completions API at the fixed `https://api.openai.com/v1/chat/completions` endpoint. Custom endpoints and other providers are not supported.
+
+Use a separate trusted `workflow_dispatch` workflow to enable it. Review the workflow and checked-out ref before running it. Add an OpenAI project key as your repository or environment secret `OPENAI_API_KEY` and choose a model you have access to that supports JSON mode and `max_completion_tokens`. No key is needed for ordinary drift checks, and the Action does not create or configure one.
+
+Replace the Action step's inputs in that trusted workflow with:
+
+```yaml
+        with:
+          ai-review: 'true'
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: YOUR_SUPPORTED_MODEL_ID
+          ai-files: |
+            README.md
+            docs/**/*.md
+            src/**/*.js
+          max-output-tokens: '2000'
+          timeout-seconds: '30'
+```
+
+`ai-review: 'true'` explicitly consents to sending content to OpenAI. `ai-files` is a newline-separated allowlist of repository-root-relative globs, including both the watched documents and relevant code. Keep it narrow; do not include credentials, sensitive fixtures, or files you cannot share with the provider. All matching related files may be sent, not only hyperlinks in the document. Relationships come from catchmydrift's existing subtree/configuration rules; this version does not resolve arbitrary external links or recursively fetch dependencies. Only flagged watched documents are candidates. Files outside the allowlist, untracked files, working-tree changes, symlinks, and binary blobs are excluded from model context.
+
+The request contains committed HEAD file paths and full text, selected document names, baseline/HEAD SHAs, bounded related diffs, and coverage information. Credentials are sent only in the authorization header, not in the prompt. `store: false` disables API completion storage; it is not a promise of zero provider retention. Review [OpenAI's data controls](https://developers.openai.com/api/docs/guides/your-data) before enabling it.
+
+Each run makes at most **one request**, with no retries or tools: at most 3 flagged documents, 12 text files, 12,000 bytes per file, 48,000 bytes of serialized context, 64,000 response bytes, and 256–4,000 completion tokens (default 2,000). The request deadline is 1–60 seconds (default 30), including its body. Git operations have timeouts and output limits; set a workflow job timeout as shown above. These bounds limit usage, not a fixed dollar amount: model prices vary, so set a provider project budget too. Coverage and omitted files are recorded in the report, including related files excluded by the allowlist (as a count). Deleted related files contribute deterministic drift but their historical contents and deletion diffs are not sent; the report records that gap for allowlisted deleted paths. Review removed APIs manually. Selected document counts do not imply complete dependency coverage. Large repositories/history may exceed deterministic scan or Git limits; narrow `root` and configuration when needed.
+
+Repository contents and diffs are treated as untrusted data in a fixed system prompt. The model has no tools. Its references must match supplied current-file lines, and each proposed edit must uniquely match supplied watched documentation. The patch is generated locally from validated edits. These checks catch fabricated references and out-of-scope edits; they cannot prove a model's interpretation or resist every prompt injection. Inspect the explanation, references, coverage, and patch before applying anything. Download `proposed.patch`, check it against the reported HEAD (`git apply --check proposed.patch`), and apply it yourself only after review. Never automatically execute patch contents or feed artifacts into a privileged workflow.
+
+Supported events are `pull_request`, `push`, `workflow_dispatch`, and `schedule`. Fork PRs run deterministic detection but skip AI, even if configured. **Never supply secrets or write tokens to fork PRs.** The Action rejects `pull_request_target`; do not use it to run PR-controlled code. Same-repository PRs can also contain adversarial content: the recommended AI workflow is manually dispatched on reviewed code with read-only permissions. Do not run package scripts from a PR checkout just to analyze documentation.
+
+### Inputs, outputs, and failures
+
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `root` | `.` | Scan directory within `GITHUB_WORKSPACE` |
+| `config` | auto-discover | Existing JSON configuration path, relative to workspace |
+| `threshold` | configuration or 20 | Override drift threshold percentage |
+| `fail-on-drift` | `false` | Fail when deterministic drift exceeds threshold |
+| `ai-review` | `false` | Explicitly enable provider submission |
+| `ai-files` | empty | Required allowlist when AI is enabled |
+| `openai-api-key` | empty | Consumer secret, required for AI |
+| `model` | empty | Required explicit compatible model ID |
+| `max-output-tokens` | `2000` | Completion token limit, 256–4,000 |
+| `timeout-seconds` | `30` | AI wall-clock deadline, 1–60 |
+| `fail-on-ai-error` | `false` | Fail on provider/validation/context failure |
+
+Outputs: `drift-detected` (`true`/`false`), `ai-status`, and `report-directory`. The directory contains `report.json` (deterministic results, AI explanation and verified references, context coverage and HEAD when AI runs) and `proposed.patch` (empty when there is no accepted proposal). The job summary contains status only; untrusted repository/model prose is kept in the artifact. AI status is `disabled`, `skipped_fork`, `mismatch`, `no_change`, `insufficient_evidence`, or `unavailable`.
+
+Missing credentials/model, unsupported events, invalid inputs, unhealthy state/configuration, or failed deterministic analysis fail the step. Provider errors, refusals, timeouts, truncated/oversized responses, invalid JSON, unverifiable references, and invalid edits produce `unavailable` with deterministic results retained. They fail the step only with `fail-on-ai-error: 'true'`. No automatic retry incurs additional cost. No flagged/eligible documents produces `insufficient_evidence` without a request. A no-change result applies only to the supplied evidence, not the entire repository.
+
+### Sharing and maintaining the Action
+
+After review and merge, another repository can consume `pmcelhaney/catchmydrift@<full-commit-SHA>` directly; a Marketplace listing is optional. Prefer full SHA pinning for reproducibility and supply-chain review. Maintainers may later publish a release and major-version tag such as `v1`; movable tags are convenient but can change behavior between runs. Publishing a release, moving tags, and accepting Marketplace agreements are separate maintainer actions, not performed by this PR. See [GitHub's JavaScript Action guide](https://docs.github.com/actions/tutorials/creating-a-javascript-action) and [publishing guide](https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace).
+
+For Action changes, run `npm ci`, `npm run build:action`, `npm test`, and `git diff --check`. Commit the regenerated `dist/` files alongside source. CI rebuilds the bundle and checks for differences, then exercises it from a separate consumer directory without `node_modules`. AI tests use mocked responses and real temporary Git histories; they do not send code to a model or establish live production quality.

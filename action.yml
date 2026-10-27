@@ -1,0 +1,45 @@
+name: Catch My Drift
+description: Detect documentation drift and optionally propose an evidence-backed AI documentation patch for human review.
+author: Patrick McElhaney
+branding:
+  icon: compass
+  color: blue
+inputs:
+  root:
+    description: Scan directory inside the checked-out workspace
+    default: '.'
+  config:
+    description: Optional JSON configuration path (relative to workspace)
+  threshold:
+    description: Override drift threshold percentage (otherwise use existing configuration/defaults)
+  fail-on-drift:
+    description: Fail the step when deterministic drift exceeds the threshold
+    default: 'false'
+  ai-review:
+    description: Explicit consent to send allowlisted committed files and diffs to OpenAI
+    default: 'false'
+  ai-files:
+    description: Newline-separated repository-relative glob allowlist for ALL files sent to OpenAI, including watched documents
+  openai-api-key:
+    description: Consumer-provided OpenAI API key; only needed for AI review
+  model:
+    description: Explicit OpenAI Chat Completions model supporting JSON mode and max_completion_tokens
+  max-output-tokens:
+    description: Maximum completion tokens for the single request (256–4000)
+    default: '2000'
+  timeout-seconds:
+    description: AI request deadline including response body (1–60 seconds)
+    default: '30'
+  fail-on-ai-error:
+    description: Fail when AI review is unavailable; otherwise retain deterministic results
+    default: 'false'
+outputs:
+  report-directory:
+    description: Temporary directory containing report.json and proposed.patch, ready for upload-artifact
+  drift-detected:
+    description: Whether deterministic drift exceeds a threshold (true or false)
+  ai-status:
+    description: disabled, skipped_fork, mismatch, no_change, insufficient_evidence, or unavailable
+runs:
+  using: node24
+  main: dist/index.js

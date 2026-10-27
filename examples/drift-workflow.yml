@@ -1,0 +1,26 @@
+name: Documentation drift
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Replace ACTION_COMMIT_SHA with the reviewed, full commit SHA after merge.
+      - uses: pmcelhaney/catchmydrift@ACTION_COMMIT_SHA
+        id: drift
+        # Offline by default. For AI, use a separate trusted workflow_dispatch
+        # workflow, review its checkout ref, then add the inputs in README.md.
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.drift.outputs.report-directory != ''
+        with:
+          name: catchmydrift-review
+          path: ${{ steps.drift.outputs.report-directory }}
+          retention-days: 7
