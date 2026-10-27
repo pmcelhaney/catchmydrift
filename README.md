@@ -267,7 +267,7 @@ Use this repository as a JavaScript Action to run the existing drift checks with
 Give this prompt to an AI coding assistant with access to your repository:
 
 ```text
-Install the catchmydrift GitHub Action in this repository. Follow the setup instructions at https://github.com/pmcelhaney/catchmydrift/blob/main/README.md#github-action. Adapt the example to our existing workflows and configuration, pin the action to a full commit SHA containing action.yml, and validate the resulting workflow.
+Install the catchmydrift GitHub Action in this repository. Follow the setup instructions at https://github.com/pmcelhaney/catchmydrift/blob/main/README.md#github-action. Adapt the example to our existing workflows and configuration, and validate the resulting workflow.
 ```
 
 ### Install manually
