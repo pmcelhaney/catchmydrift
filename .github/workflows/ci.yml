@@ -48,8 +48,7 @@ jobs:
       - name: Verify Action artifacts
         env:
           REPORT_DIRECTORY: ${{ steps.drift.outputs.report-directory }}
-          AI_STATUS: ${{ steps.drift.outputs.ai-status }}
+          DRIFT_DETECTED: ${{ steps.drift.outputs.drift-detected }}
         run: |
-          test "$AI_STATUS" = disabled
+          test "$DRIFT_DETECTED" = true -o "$DRIFT_DETECTED" = false
           test -f "$REPORT_DIRECTORY/report.json"
-          test -f "$REPORT_DIRECTORY/proposed.patch"

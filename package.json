@@ -41,7 +41,6 @@
     "@actions/core": "3.0.1",
     "@changesets/cli": "3.0.3",
     "@vercel/ncc": "0.45.0",
-    "ajv": "8.20.0",
-    "diff": "9.0.0"
+    "ajv": "8.20.0"
   }
 }
