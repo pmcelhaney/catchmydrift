@@ -42,7 +42,8 @@ function commitAll(repository, message) {
 function runCli(args, cwd) {
   return spawnSync(process.execPath, [cliEntryPoint, ...args], {
     cwd,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: { ...process.env, CATCHMYDRIFT_NO_UPDATE_CHECK: '1' }
   });
 }
 

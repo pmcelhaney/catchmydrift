@@ -41,7 +41,7 @@ function packInstalledDependency(directory, destination) {
 }
 
 function runInstalledCli(binary, args, cwd) {
-  return spawnSync(binary, args, { cwd, encoding: 'utf8' });
+  return spawnSync(binary, args, { cwd, encoding: 'utf8', env: { ...process.env, CATCHMYDRIFT_NO_UPDATE_CHECK: '1' } });
 }
 
 function assertStatus(result, expected) {
@@ -78,7 +78,8 @@ test('the packed package installs locally and its installed CLI covers check, co
   const packedDependencies = [
     packInstalledDependency(path.join(packageRoot, 'node_modules/minimatch'), packages),
     packInstalledDependency(path.join(packageRoot, 'node_modules/brace-expansion'), packages),
-    packInstalledDependency(path.join(packageRoot, 'node_modules/balanced-match'), packages)
+    packInstalledDependency(path.join(packageRoot, 'node_modules/balanced-match'), packages),
+    packInstalledDependency(path.join(packageRoot, 'node_modules/semver'), packages)
   ];
 
   const expectedFiles = [
@@ -91,6 +92,7 @@ test('the packed package installs locally and its installed CLI covers check, co
     'lib/drift.js',
     'lib/git.js',
     'lib/review-state.js',
+    'lib/update-check.js',
     'package.json'
   ];
   // Changesets creates the packaged changelog on the first release.
@@ -108,7 +110,8 @@ test('the packed package installs locally and its installed CLI covers check, co
     ['catchmydrift', packedApplication.tarball],
     ['minimatch', packedDependencies[0]],
     ['brace-expansion', packedDependencies[1]],
-    ['balanced-match', packedDependencies[2]]
+    ['balanced-match', packedDependencies[2]],
+    ['semver', packedDependencies[3]]
   ].map(([name, tarball]) => [name, `file:${tarball}`]));
   writeFile(consumer, 'package.json', `${JSON.stringify({ private: true, dependencies }, null, 2)}\n`);
   execFileSync('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], {
@@ -132,6 +135,16 @@ test('the packed package installs locally and its installed CLI covers check, co
     'docs/service.txt': 'before\n'
   });
   assertStatus(runInstalledCli(binary, ['check'], repository), 0);
+  const installedEntry = path.join(consumer, 'node_modules', 'catchmydrift', 'index.js');
+  const outdated = spawnSync(process.execPath, ['-e', `
+    const { runCli } = require(${JSON.stringify(installedEntry)});
+    runCli(['check'], { env: {}, lookupLatestVersion: async () => '999.0.0' })
+      .then(status => { process.exitCode = status; });
+  `], { cwd: repository, encoding: 'utf8' });
+  assertStatus(outdated, 0);
+  assert.match(outdated.stdout, /Healthy:/);
+  assert.match(outdated.stderr, /latest version 999\.0\.0/);
+  assert.match(outdated.stderr, /npm install --save-dev catchmydrift@latest/);
   writeFile(repository, 'docs/service.txt', 'after\n');
   const zeroConfigDrift = runInstalledCli(binary, ['check'], repository);
   assertStatus(zeroConfigDrift, 1);
