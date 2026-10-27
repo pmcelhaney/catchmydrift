@@ -2,61 +2,76 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
-/***/ 9422:
+/***/ 422:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const fs = __nccwpck_require__(3024);
-const os = __nccwpck_require__(8161);
-const path = __nccwpck_require__(6760);
-let core;
-const { check, parseThreshold } = __nccwpck_require__(6136);
-const { normalizeScanRoot, runGit, isWithin } = __nccwpck_require__(9412);
+const fs = __nccwpck_require__(24);
+const os = __nccwpck_require__(161);
+const path = __nccwpck_require__(760);
+const { randomUUID } = __nccwpck_require__(598);
+const { check, parseThreshold } = __nccwpck_require__(136);
+const { normalizeScanRoot, runGit, isWithin } = __nccwpck_require__(412);
 
+function input(name) {
+  return (process.env[`INPUT_${name.toUpperCase().replace(/ /g, '_')}`] || '').trim();
+}
+function setOutput(name, value) {
+  // File commands support multiline paths without interpreting them as commands.
+  let delimiter;
+  do { delimiter = `catchmydrift_${randomUUID()}`; } while (value.includes(delimiter));
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}<<${delimiter}\n${value}\n${delimiter}\n`);
+}
+function setFailed(message) {
+  console.error(message);
+  process.exitCode = 1;
+}
 function bool(name, fallback = false) {
-  const value = core.getInput(name);
+  const value = input(name);
   if (!value) return fallback;
   if (!['true', 'false'].includes(value)) throw new Error(`Input ${name} must be true or false.`);
   return value === 'true';
 }
-async function run() {
-  core = await __nccwpck_require__.e(/* import() */ 421).then(__nccwpck_require__.bind(__nccwpck_require__, 6421));
-  const root = path.resolve(process.env.GITHUB_WORKSPACE || '.', core.getInput('root') || '.');
+function run() {
+  const root = path.resolve(process.env.GITHUB_WORKSPACE || '.', input('root') || '.');
   const workspace = fs.realpathSync(process.env.GITHUB_WORKSPACE || '.');
   if (!isWithin(workspace, fs.realpathSync(root))) throw new Error('root must stay within GITHUB_WORKSPACE.');
   const { repositoryRoot } = normalizeScanRoot(root);
   if (runGit(['rev-parse', '--is-shallow-repository'], repositoryRoot).stdout.toString('utf8').trim() === 'true') {
-    core.setFailed('Catch My Drift requires full Git history. Set fetch-depth: 0 on actions/checkout and rerun the job.');
+    setFailed('Catch My Drift requires full Git history. Set fetch-depth: 0 on actions/checkout and rerun the job.');
     return;
   }
-  const threshold = core.getInput('threshold');
-  const scan = check(root, { config: core.getInput('config') || undefined, cwd: workspace,
+  const threshold = input('threshold');
+  const scan = check(root, { config: input('config') || undefined, cwd: workspace,
     ...(threshold ? { threshold: parseThreshold(threshold), thresholdProvided: true } : {}) });
   const report = { driftDetected: scan.failed, results: scan.results.map(({ watchedPath, baseline, percent, threshold, missing }) =>
       ({ watchedPath, baseline, percent: Number.isFinite(percent) ? percent : null, threshold, missing: !!missing })) };
   const output = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'catchmydrift-'));
   fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
-  core.setOutput('report-directory', output);
-  core.setOutput('drift-detected', String(scan.failed));
-  core.summary.addHeading('Catch My Drift').addRaw(`Drift detected: ${scan.failed}.\n\nSee report.json in the report artifact for results.`);
-  await core.summary.write();
-  if (bool('fail-on-drift') && scan.failed) core.setFailed('Documentation drift exceeds the configured threshold.');
+  setOutput('report-directory', output);
+  setOutput('drift-detected', String(scan.failed));
+  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `# Catch My Drift\n\nDrift detected: ${scan.failed}.\n\nSee report.json in the report artifact for results.\n`);
+  if (bool('fail-on-drift') && scan.failed) setFailed('Documentation drift exceeds the configured threshold.');
 }
-if (require.main === require.cache[eval('__filename')]) run().catch(() => core.setFailed('Catch My Drift could not analyze this checkout. Check inputs, full Git history, and configuration; see the README for setup instructions.'));
+if (require.main === require.cache[eval('__filename')]) {
+  try { run(); } catch {
+    setFailed('Catch My Drift could not analyze this checkout. Check inputs, full Git history, and configuration; see the README for setup instructions.');
+  }
+}
 module.exports = { run };
 
 
 /***/ }),
 
-/***/ 6136:
+/***/ 136:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 
-const path = __nccwpck_require__(6760);
-const packageJson = __nccwpck_require__(8330);
+const path = __nccwpck_require__(760);
+const packageJson = __nccwpck_require__(330);
 const {
   OperationalError,
   normalizeScanRoot,
@@ -71,7 +86,7 @@ const {
   listTreeEntries,
   selectNewerCommit,
   EMPTY_TREE_HASH
-} = __nccwpck_require__(9412);
+} = __nccwpck_require__(412);
 const {
   scanMarkdownDrift,
   calculateDriftForRelatedPaths,
@@ -85,20 +100,20 @@ const {
   sumTextChanges,
   defaultRelationshipDefinition,
   matchesDefaultRelationship
-} = __nccwpck_require__(5295);
+} = __nccwpck_require__(295);
 const {
   ConfigError,
   resolveConfigPath,
   resolveConfiguredWatch,
   matchesConfiguredRelationship,
   scanRelativePath
-} = __nccwpck_require__(6472);
+} = __nccwpck_require__(472);
 const {
   STATE_FILENAME,
   StateHealthError,
   loadState,
   writeStateAtomically
-} = __nccwpck_require__(2246);
+} = __nccwpck_require__(246);
 
 const USAGE = `Usage: catchmydrift [check] [root] [options]
        catchmydrift review <file...> [--root <root>] [--config <path>]
@@ -611,20 +626,20 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6472:
+/***/ 472:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const fs = __nccwpck_require__(3024);
-const path = __nccwpck_require__(6760);
-const { Minimatch, unescape } = __nccwpck_require__(6507);
+const fs = __nccwpck_require__(24);
+const path = __nccwpck_require__(760);
+const { Minimatch, unescape } = __nccwpck_require__(507);
 const {
   OperationalError,
   comparePaths,
   isStatePath,
   isWithin
-} = __nccwpck_require__(9412);
+} = __nccwpck_require__(412);
 
 const DEFAULT_CONFIG_FILENAME = 'catchmydrift.config.json';
 const MATCH_OPTIONS = Object.freeze({ dot: true, nocomment: true, nonegate: true });
@@ -956,20 +971,20 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5295:
+/***/ 295:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const fs = __nccwpck_require__(3024);
-const path = __nccwpck_require__(6760);
+const fs = __nccwpck_require__(24);
+const path = __nccwpck_require__(760);
 const {
   OperationalError,
   baselineForPath,
   diffNumstat,
   diffAttributesForPaths,
   comparePaths
-} = __nccwpck_require__(9412);
+} = __nccwpck_require__(412);
 
 function isMarkdownPath(relativePath) {
   return relativePath.endsWith('.md');
@@ -1230,14 +1245,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9412:
+/***/ 412:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const childProcess = __nccwpck_require__(1421);
-const fs = __nccwpck_require__(3024);
-const path = __nccwpck_require__(6760);
+const childProcess = __nccwpck_require__(421);
+const fs = __nccwpck_require__(24);
+const path = __nccwpck_require__(760);
 
 const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const GIT_MAX_BUFFER = 32 * 1024 * 1024;
@@ -1490,15 +1505,15 @@ module.exports = {
 
 /***/ }),
 
-/***/ 2246:
+/***/ 246:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const crypto = __nccwpck_require__(7598);
-const fs = __nccwpck_require__(3024);
-const path = __nccwpck_require__(6760);
-const { OperationalError, comparePaths, isStatePath, runGit } = __nccwpck_require__(9412);
+const crypto = __nccwpck_require__(598);
+const fs = __nccwpck_require__(24);
+const path = __nccwpck_require__(760);
+const { OperationalError, comparePaths, isStatePath, runGit } = __nccwpck_require__(412);
 
 const STATE_FILENAME = '.catchmydrift-state.json';
 const HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -1618,273 +1633,42 @@ module.exports = {
 
 /***/ }),
 
-/***/ 2613:
-/***/ ((module) => {
-
-module.exports = require("assert");
-
-/***/ }),
-
-/***/ 5317:
-/***/ ((module) => {
-
-module.exports = require("child_process");
-
-/***/ }),
-
-/***/ 6982:
-/***/ ((module) => {
-
-module.exports = require("crypto");
-
-/***/ }),
-
-/***/ 4434:
-/***/ ((module) => {
-
-module.exports = require("events");
-
-/***/ }),
-
-/***/ 9896:
-/***/ ((module) => {
-
-module.exports = require("fs");
-
-/***/ }),
-
-/***/ 8611:
-/***/ ((module) => {
-
-module.exports = require("http");
-
-/***/ }),
-
-/***/ 5692:
-/***/ ((module) => {
-
-module.exports = require("https");
-
-/***/ }),
-
-/***/ 9278:
-/***/ ((module) => {
-
-module.exports = require("net");
-
-/***/ }),
-
-/***/ 4589:
-/***/ ((module) => {
-
-module.exports = require("node:assert");
-
-/***/ }),
-
-/***/ 6698:
-/***/ ((module) => {
-
-module.exports = require("node:async_hooks");
-
-/***/ }),
-
-/***/ 4573:
-/***/ ((module) => {
-
-module.exports = require("node:buffer");
-
-/***/ }),
-
-/***/ 1421:
+/***/ 421:
 /***/ ((module) => {
 
 module.exports = require("node:child_process");
 
 /***/ }),
 
-/***/ 7540:
-/***/ ((module) => {
-
-module.exports = require("node:console");
-
-/***/ }),
-
-/***/ 7598:
+/***/ 598:
 /***/ ((module) => {
 
 module.exports = require("node:crypto");
 
 /***/ }),
 
-/***/ 3053:
-/***/ ((module) => {
-
-module.exports = require("node:diagnostics_channel");
-
-/***/ }),
-
-/***/ 610:
-/***/ ((module) => {
-
-module.exports = require("node:dns");
-
-/***/ }),
-
-/***/ 8474:
-/***/ ((module) => {
-
-module.exports = require("node:events");
-
-/***/ }),
-
-/***/ 3024:
+/***/ 24:
 /***/ ((module) => {
 
 module.exports = require("node:fs");
 
 /***/ }),
 
-/***/ 7067:
-/***/ ((module) => {
-
-module.exports = require("node:http");
-
-/***/ }),
-
-/***/ 2467:
-/***/ ((module) => {
-
-module.exports = require("node:http2");
-
-/***/ }),
-
-/***/ 7030:
-/***/ ((module) => {
-
-module.exports = require("node:net");
-
-/***/ }),
-
-/***/ 8161:
+/***/ 161:
 /***/ ((module) => {
 
 module.exports = require("node:os");
 
 /***/ }),
 
-/***/ 6760:
+/***/ 760:
 /***/ ((module) => {
 
 module.exports = require("node:path");
 
 /***/ }),
 
-/***/ 643:
-/***/ ((module) => {
-
-module.exports = require("node:perf_hooks");
-
-/***/ }),
-
-/***/ 1792:
-/***/ ((module) => {
-
-module.exports = require("node:querystring");
-
-/***/ }),
-
-/***/ 7075:
-/***/ ((module) => {
-
-module.exports = require("node:stream");
-
-/***/ }),
-
-/***/ 1692:
-/***/ ((module) => {
-
-module.exports = require("node:tls");
-
-/***/ }),
-
-/***/ 3136:
-/***/ ((module) => {
-
-module.exports = require("node:url");
-
-/***/ }),
-
-/***/ 7975:
-/***/ ((module) => {
-
-module.exports = require("node:util");
-
-/***/ }),
-
-/***/ 3429:
-/***/ ((module) => {
-
-module.exports = require("node:util/types");
-
-/***/ }),
-
-/***/ 5919:
-/***/ ((module) => {
-
-module.exports = require("node:worker_threads");
-
-/***/ }),
-
-/***/ 8522:
-/***/ ((module) => {
-
-module.exports = require("node:zlib");
-
-/***/ }),
-
-/***/ 857:
-/***/ ((module) => {
-
-module.exports = require("os");
-
-/***/ }),
-
-/***/ 6928:
-/***/ ((module) => {
-
-module.exports = require("path");
-
-/***/ }),
-
-/***/ 3193:
-/***/ ((module) => {
-
-module.exports = require("string_decoder");
-
-/***/ }),
-
-/***/ 3557:
-/***/ ((module) => {
-
-module.exports = require("timers");
-
-/***/ }),
-
-/***/ 4756:
-/***/ ((module) => {
-
-module.exports = require("tls");
-
-/***/ }),
-
-/***/ 9023:
-/***/ ((module) => {
-
-module.exports = require("util");
-
-/***/ }),
-
-/***/ 2649:
+/***/ 649:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -1949,14 +1733,14 @@ exports.range = range;
 
 /***/ }),
 
-/***/ 8968:
+/***/ 968:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.EXPANSION_MAX_REWRITES = exports.EXPANSION_MAX_DEPTH = exports.EXPANSION_MAX_LENGTH = exports.EXPANSION_MAX = void 0;
 exports.expand = expand;
-const balanced_match_1 = __nccwpck_require__(2649);
+const balanced_match_1 = __nccwpck_require__(649);
 const escSlash = '\0SLASH' + Math.random() + '\0';
 const escOpen = '\0OPEN' + Math.random() + '\0';
 const escClose = '\0CLOSE' + Math.random() + '\0';
@@ -2288,7 +2072,7 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
 
 /***/ }),
 
-/***/ 7305:
+/***/ 305:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -2308,7 +2092,7 @@ exports.assertValidPattern = assertValidPattern;
 
 /***/ }),
 
-/***/ 1803:
+/***/ 803:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
@@ -2316,7 +2100,7 @@ exports.assertValidPattern = assertValidPattern;
 var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AST = void 0;
-const brace_expressions_js_1 = __nccwpck_require__(1090);
+const brace_expressions_js_1 = __nccwpck_require__(90);
 const unescape_js_1 = __nccwpck_require__(851);
 const types = new Set(['!', '?', '+', '*', '@']);
 const isExtglobType = (c) => types.has(c);
@@ -3159,7 +2943,7 @@ _a = AST;
 
 /***/ }),
 
-/***/ 1090:
+/***/ 90:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -3351,15 +3135,15 @@ exports.escape = escape;
 
 /***/ }),
 
-/***/ 6507:
+/***/ 507:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.unescape = exports.escape = exports.AST = exports.Minimatch = exports.match = exports.makeRe = exports.braceExpand = exports.defaults = exports.filter = exports.GLOBSTAR = exports.sep = exports.minimatch = void 0;
-const brace_expansion_1 = __nccwpck_require__(8968);
-const assert_valid_pattern_js_1 = __nccwpck_require__(7305);
-const ast_js_1 = __nccwpck_require__(1803);
+const brace_expansion_1 = __nccwpck_require__(968);
+const assert_valid_pattern_js_1 = __nccwpck_require__(305);
+const ast_js_1 = __nccwpck_require__(803);
 const escape_js_1 = __nccwpck_require__(800);
 const unescape_js_1 = __nccwpck_require__(851);
 const minimatch = (p, pattern, options = {}) => {
@@ -4469,7 +4253,7 @@ class Minimatch {
 }
 exports.Minimatch = Minimatch;
 /* c8 ignore start */
-var ast_js_2 = __nccwpck_require__(1803);
+var ast_js_2 = __nccwpck_require__(803);
 Object.defineProperty(exports, "AST", ({ enumerable: true, get: function () { return ast_js_2.AST; } }));
 var escape_js_2 = __nccwpck_require__(800);
 Object.defineProperty(exports, "escape", ({ enumerable: true, get: function () { return escape_js_2.escape; } }));
@@ -4528,10 +4312,10 @@ exports.unescape = unescape;
 
 /***/ }),
 
-/***/ 8330:
+/***/ 330:
 /***/ ((module) => {
 
-module.exports = /*#__PURE__*/JSON.parse('{"name":"catchmydrift","version":"0.1.0","description":"Checks watched files for drift against related Git-tracked changes","main":"index.js","files":["index.js","lib","catchmydrift.schema.json","catchmydrift-state.schema.json","CHANGELOG.md","README.md"],"scripts":{"test":"node --test","changeset":"changeset","release:version":"changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund","release":"changeset publish","build:action":"ncc build action/main.js -o dist --license licenses.txt"},"author":"Patrick McElhaney","license":"ISC","repository":{"type":"git","url":"git+https://github.com/pmcelhaney/catchmydrift.git"},"bugs":{"url":"https://github.com/pmcelhaney/catchmydrift/issues"},"homepage":"https://github.com/pmcelhaney/catchmydrift#readme","bin":{"catchmydrift":"./index.js"},"engines":{"node":">=22"},"dependencies":{"minimatch":"10.2.6"},"devDependencies":{"@actions/core":"3.0.1","@changesets/cli":"3.0.3","@vercel/ncc":"0.45.0","ajv":"8.20.0"}}');
+module.exports = /*#__PURE__*/JSON.parse('{"name":"catchmydrift","version":"0.1.0","description":"Checks watched files for drift against related Git-tracked changes","main":"index.js","files":["index.js","lib","catchmydrift.schema.json","catchmydrift-state.schema.json","CHANGELOG.md","README.md"],"scripts":{"test":"node --test","changeset":"changeset","release:version":"changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund","release":"changeset publish","build:action":"node -e \\"require(\'node:fs\').rmSync(\'dist\', { recursive: true, force: true })\\" && ncc build action/main.js -o dist --license licenses.txt"},"author":"Patrick McElhaney","license":"ISC","repository":{"type":"git","url":"git+https://github.com/pmcelhaney/catchmydrift.git"},"bugs":{"url":"https://github.com/pmcelhaney/catchmydrift/issues"},"homepage":"https://github.com/pmcelhaney/catchmydrift#readme","bin":{"catchmydrift":"./index.js"},"engines":{"node":">=22"},"dependencies":{"minimatch":"10.2.6"},"devDependencies":{"@changesets/cli":"3.0.3","@vercel/ncc":"0.45.0","ajv":"8.20.0"}}');
 
 /***/ })
 
@@ -4567,141 +4351,16 @@ module.exports = /*#__PURE__*/JSON.parse('{"name":"catchmydrift","version":"0.1.
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
-/******/ 	// expose the modules object (__webpack_modules__)
-/******/ 	__nccwpck_require__.m = __webpack_modules__;
-/******/ 	
 /************************************************************************/
 /******/ 	/* webpack/runtime/asset-relocator-loader */
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
-/******/ 	
-/******/ 	/* webpack/runtime/create fake namespace object */
-/******/ 	(() => {
-/******/ 		var getProto = Object.getPrototypeOf ? (obj) => (Object.getPrototypeOf(obj)) : (obj) => (obj.__proto__);
-/******/ 		var leafPrototypes;
-/******/ 		// create a fake namespace object
-/******/ 		// mode & 1: value is a module id, require it
-/******/ 		// mode & 2: merge all properties of value into the ns
-/******/ 		// mode & 4: return value when already ns object
-/******/ 		// mode & 16: return value when it's Promise-like
-/******/ 		// mode & 8|1: behave like require
-/******/ 		__nccwpck_require__.t = function(value, mode) {
-/******/ 			if(mode & 1) value = this(value);
-/******/ 			if(mode & 8) return value;
-/******/ 			if(typeof value === 'object' && value) {
-/******/ 				if((mode & 4) && value.__esModule) return value;
-/******/ 				if((mode & 16) && typeof value.then === 'function') return value;
-/******/ 			}
-/******/ 			var ns = Object.create(null);
-/******/ 			__nccwpck_require__.r(ns);
-/******/ 			var def = {};
-/******/ 			leafPrototypes = leafPrototypes || [null, getProto({}), getProto([]), getProto(getProto)];
-/******/ 			for(var current = mode & 2 && value; typeof current == 'object' && !~leafPrototypes.indexOf(current); current = getProto(current)) {
-/******/ 				Object.getOwnPropertyNames(current).forEach((key) => (def[key] = () => (value[key])));
-/******/ 			}
-/******/ 			def['default'] = () => (value);
-/******/ 			__nccwpck_require__.d(ns, def);
-/******/ 			return ns;
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/define property getters */
-/******/ 	(() => {
-/******/ 		// define getter functions for harmony exports
-/******/ 		__nccwpck_require__.d = (exports, definition) => {
-/******/ 			for(var key in definition) {
-/******/ 				if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
-/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
-/******/ 				}
-/******/ 			}
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/ensure chunk */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.f = {};
-/******/ 		// This file contains only the entry chunk.
-/******/ 		// The chunk loading function for additional chunks
-/******/ 		__nccwpck_require__.e = (chunkId) => {
-/******/ 			return Promise.all(Object.keys(__nccwpck_require__.f).reduce((promises, key) => {
-/******/ 				__nccwpck_require__.f[key](chunkId, promises);
-/******/ 				return promises;
-/******/ 			}, []));
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/get javascript chunk filename */
-/******/ 	(() => {
-/******/ 		// This function allow to reference async chunks
-/******/ 		__nccwpck_require__.u = (chunkId) => {
-/******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + ".index.js";
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/make namespace object */
-/******/ 	(() => {
-/******/ 		// define __esModule on exports
-/******/ 		__nccwpck_require__.r = (exports) => {
-/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 			}
-/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/require chunk loading */
-/******/ 	(() => {
-/******/ 		// no baseURI
-/******/ 		
-/******/ 		// object to store loaded chunks
-/******/ 		// "1" means "loaded", otherwise not loaded yet
-/******/ 		var installedChunks = {
-/******/ 			792: 1
-/******/ 		};
-/******/ 		
-/******/ 		// no on chunks loaded
-/******/ 		
-/******/ 		var installChunk = (chunk) => {
-/******/ 			var moreModules = chunk.modules, chunkIds = chunk.ids, runtime = chunk.runtime;
-/******/ 			for(var moduleId in moreModules) {
-/******/ 				if(__nccwpck_require__.o(moreModules, moduleId)) {
-/******/ 					__nccwpck_require__.m[moduleId] = moreModules[moduleId];
-/******/ 				}
-/******/ 			}
-/******/ 			if(runtime) runtime(__nccwpck_require__);
-/******/ 			for(var i = 0; i < chunkIds.length; i++)
-/******/ 				installedChunks[chunkIds[i]] = 1;
-/******/ 		
-/******/ 		};
-/******/ 		
-/******/ 		// require() chunk loading for javascript
-/******/ 		__nccwpck_require__.f.require = (chunkId, promises) => {
-/******/ 			// "1" is the signal for "already loaded"
-/******/ 			if(!installedChunks[chunkId]) {
-/******/ 				if(true) { // all chunks have JS
-/******/ 					installChunk(require("./" + __nccwpck_require__.u(chunkId)));
-/******/ 				} else installedChunks[chunkId] = 1;
-/******/ 			}
-/******/ 		};
-/******/ 		
-/******/ 		// no external install chunk
-/******/ 		
-/******/ 		// no HMR
-/******/ 		
-/******/ 		// no HMR manifest
-/******/ 	})();
 /******/ 	
 /************************************************************************/
 /******/ 	
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
-/******/ 	var __webpack_exports__ = __nccwpck_require__(9422);
+/******/ 	var __webpack_exports__ = __nccwpck_require__(422);
 /******/ 	module.exports = __webpack_exports__;
 /******/ 	
 /******/ })()

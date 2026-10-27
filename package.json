@@ -16,7 +16,7 @@
     "changeset": "changeset",
     "release:version": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
     "release": "changeset publish",
-    "build:action": "ncc build action/main.js -o dist --license licenses.txt"
+    "build:action": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && ncc build action/main.js -o dist --license licenses.txt"
   },
   "author": "Patrick McElhaney",
   "license": "ISC",
@@ -38,7 +38,6 @@
     "minimatch": "10.2.6"
   },
   "devDependencies": {
-    "@actions/core": "3.0.1",
     "@changesets/cli": "3.0.3",
     "@vercel/ncc": "0.45.0",
     "ajv": "8.20.0"

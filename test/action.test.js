@@ -41,7 +41,7 @@ function consumer(t, root) {
     output: () => fs.readFileSync(output, 'utf8'),
     summary: () => fs.readFileSync(summary, 'utf8'),
     report() {
-      const directory = this.output().match(/report-directory<<[^\n]+\n([^\n]+)/)[1];
+      const directory = this.output().match(/report-directory<<([^\n]+)\n([\s\S]*?)\n\1\n/)[2];
       assert.deepEqual(fs.readdirSync(directory), ['report.json']);
       return JSON.parse(fs.readFileSync(path.join(directory, 'report.json'), 'utf8'));
     }
@@ -99,4 +99,16 @@ test('analysis never runs configured external diff or text conversion commands',
   git('add', '.gitattributes'); git('commit', '-qm', 'attributes');
   assert.equal(check(root).failed, true);
   assert.equal(fs.existsSync(marker), false);
+});
+
+test('Action file outputs preserve multiline report paths and reject invalid boolean inputs', t => {
+  const { root } = fixture(t); const action = consumer(t, root);
+  const temporary = path.join(root, 'runner temp\nextra-output=value');
+  fs.mkdirSync(temporary);
+  const result = action.run({ RUNNER_TEMP: temporary, INPUT_THRESHOLD: ' 100 ' });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(action.report().driftDetected, false);
+  assert.match(action.output(), /drift-detected<<[^\n]+\nfalse\n/);
+  assert.doesNotMatch(result.stdout + result.stderr, /extra-output=value/);
+  assert.equal(action.run({ 'INPUT_FAIL-ON-DRIFT': 'invalid' }).status, 1);
 });
