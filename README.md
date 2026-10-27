@@ -257,3 +257,64 @@ more file arguments; `check` uses its optional positional root.
 | `0`         | The check is healthy, or a review was recorded successfully.                                        |
 | `1`         | A watched file exceeded its threshold, is missing, or has invalid review state. |
 | `2`         | Command usage, root, configuration, or review-target validation failed.                             |
+
+## GitHub Action
+
+Use this repository as a JavaScript Action to run the existing drift checks without installing npm dependencies in your project. It runs on Node 24 supplied by the Actions runner. The committed `dist/` bundle contains catchmydrift and its runtime dependencies. The small Action wrapper uses GitHub environment files directly for outputs and the job summary, so it does not need the Actions toolkit. A full Git history is required to find each watched file's last-change commit and resolve saved review SHAs. Set `fetch-depth: 0` on `actions/checkout`: zero means all history, whereas the default depth of one fetches only a single commit. The Action rejects shallow checkouts with setup instructions rather than calculating drift from an incomplete baseline.
+
+### Install with your AI
+
+Give this prompt to an AI coding assistant with access to your repository:
+
+```text
+Install the catchmydrift GitHub Action in this repository. Follow the setup instructions at https://github.com/pmcelhaney/catchmydrift/blob/main/README.md#github-action. Adapt the example to our existing workflows and configuration, and validate the resulting workflow.
+```
+
+### Install manually
+
+Copy [the example workflow](examples/drift-workflow.yml) to `.github/workflows/drift.yml`, replacing `ACTION_COMMIT_SHA` with the full reviewed commit SHA containing this Action. No Action release tag has been published as part of this change.
+
+```yaml
+name: Documentation drift
+on: [pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pmcelhaney/catchmydrift@ACTION_COMMIT_SHA
+        id: drift
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.drift.outputs.report-directory != ''
+        with:
+          name: catchmydrift-review
+          path: ${{ steps.drift.outputs.report-directory }}
+          retention-days: 7
+```
+
+By default this runs offline, does not fail for drift, and needs only `contents: read`. Set `fail-on-drift: 'true'` to gate a job on the existing deterministic threshold. The Action never commits, stages, updates review state, changes source files, opens a PR, merges, or runs repository scripts. It does not post PR comments and requires no write token. For private repositories, keep the report artifact accessible only to intended reviewers.
+
+### Inputs, outputs, and failures
+
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `root` | `.` | Scan directory within `GITHUB_WORKSPACE` |
+| `config` | auto-discover | Existing JSON configuration path, relative to workspace |
+| `threshold` | configuration or 20 | Override drift threshold percentage |
+| `fail-on-drift` | `false` | Fail when deterministic drift exceeds threshold |
+
+Outputs: `drift-detected` (`true`/`false`) and `report-directory`. The directory contains `report.json` with `driftDetected` and per-file results: watched path, baseline SHA, drift percentage, threshold, and missing-file status. An infinite drift percentage is represented as `null` in JSON. The job summary shows whether drift was detected.
+
+Invalid inputs, shallow history, unhealthy state/configuration, or failed analysis fail the step. Drift itself fails the step only with `fail-on-drift: 'true'`. The Action does not fetch history automatically; configure checkout before running it.
+
+### Sharing and maintaining the Action
+
+After review and merge, another repository can consume `pmcelhaney/catchmydrift@<full-commit-SHA>` directly; a Marketplace listing is optional. Prefer full SHA pinning for reproducibility and supply-chain review. Maintainers may later publish a release and major-version tag such as `v1`; movable tags are convenient but can change behavior between runs. Publishing a release, moving tags, and accepting Marketplace agreements are separate maintainer actions, not performed by this PR. See [GitHub's JavaScript Action guide](https://docs.github.com/actions/tutorials/creating-a-javascript-action) and [publishing guide](https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace).
+
+For Action changes, run `npm ci`, `npm run build:action`, `npm test`, and `git diff --check`. Commit the regenerated `dist/` files alongside source. CI rebuilds the bundle and checks for differences, then exercises it from a separate consumer directory without `node_modules`. Tests use real temporary Git histories, including shallow and full-history consumer checkouts.

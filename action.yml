@@ -1,0 +1,25 @@
+name: Catch My Drift
+description: Detect documentation drift using Git history.
+author: Patrick McElhaney
+branding:
+  icon: compass
+  color: blue
+inputs:
+  root:
+    description: Scan directory inside the checked-out workspace
+    default: '.'
+  config:
+    description: Optional JSON configuration path (relative to workspace)
+  threshold:
+    description: Override drift threshold percentage (otherwise use existing configuration/defaults)
+  fail-on-drift:
+    description: Fail the step when deterministic drift exceeds the threshold
+    default: 'false'
+outputs:
+  report-directory:
+    description: Temporary directory containing report.json, ready for upload-artifact
+  drift-detected:
+    description: Whether deterministic drift exceeds a threshold (true or false)
+runs:
+  using: node24
+  main: dist/index.js
