@@ -262,6 +262,16 @@ more file arguments; `check` uses its optional positional root.
 
 Use this repository as a JavaScript Action to run the existing drift checks without installing npm dependencies in your project. It runs on Node 24 supplied by the Actions runner. The committed `dist/` bundle contains catchmydrift and its runtime dependencies. The small Action wrapper uses GitHub environment files directly for outputs and the job summary, so it does not need the Actions toolkit. A full Git history is required to find each watched file's last-change commit and resolve saved review SHAs. Set `fetch-depth: 0` on `actions/checkout`: zero means all history, whereas the default depth of one fetches only a single commit. The Action rejects shallow checkouts with setup instructions rather than calculating drift from an incomplete baseline.
 
+### Install with your AI
+
+Give this prompt to an AI coding assistant with access to your repository:
+
+```text
+Install the catchmydrift GitHub Action in this repository. Follow the setup instructions at https://github.com/pmcelhaney/catchmydrift/blob/main/README.md#github-action. Adapt the example to our existing workflows and configuration, pin the action to a full commit SHA containing action.yml, and validate the resulting workflow.
+```
+
+### Install manually
+
 Copy [the example workflow](examples/drift-workflow.yml) to `.github/workflows/drift.yml`, replacing `ACTION_COMMIT_SHA` with the full reviewed commit SHA containing this Action. No Action release tag has been published as part of this change.
 
 ```yaml
