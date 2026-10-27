@@ -1,5 +1,12 @@
 # catchmydrift
 
+## 0.2.0
+
+### Minor Changes
+
+- a227842: Warn when the running CLI is older than npm's latest release and show project, global, and one-off upgrade commands. Keep registry checks bounded and optional, preserve exit codes, and skip checks in CI.
+- b156f07: Add a shareable read-only GitHub Action with drift reports, job summaries, and full-history checkout validation.
+
 ## 0.1.0
 
 ### Minor Changes
