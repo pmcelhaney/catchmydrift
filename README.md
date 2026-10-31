@@ -3,6 +3,18 @@
 `catchmydrift` is a Git-backed command-line check that reminds busy engineers to keep documentation up to date.
 It works by making sure each context / documentation file is updated when the code files it supports have drifted.
 
+For example, running it in a repository with two watched Markdown files might show:
+
+```console
+$ npx catchmydrift
+30.00% (threshold 20.00%) README.md
+2 watched files checked; 1 watched file exceeds the 20.00% threshold.
+```
+
+Here, the files related to `README.md` have drifted beyond the default 20%
+threshold, so the command exits with status `1`. Review the documentation and
+update it as needed, or [record a review without editing it](#review-a-file-without-editing-it).
+
 Out of the box, it validates that the code has not drifted more than 20% since `AGENTS.md`, `README.md`, and other markdown files were last updated.
 
 That percentage, as well as the relationship between files-that-drift and files-that-should-be-updated, can be customized with a small configuration file.
@@ -12,6 +24,15 @@ That percentage, as well as the relationship between files-that-drift and files-
 - It does not try to understand what changed; it simply alerts that change has occurred.
 - It prints a brief report and returns a pass / fail exit code.
 - It can be used by people, agents, or CI.
+
+## Table of contents
+
+- [Install and run](#install-and-run)
+- [Zero-configuration checks](#zero-configuration-checks)
+- [Configuration](#configuration)
+- [What counts as drift](#what-counts-as-drift)
+- [Review a file without editing it](#review-a-file-without-editing-it)
+- [Commands and exit status](#commands-and-exit-status)
 
 ## Install and run
 
