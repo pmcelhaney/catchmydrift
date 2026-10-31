@@ -23,7 +23,7 @@ Out of the box, it validates that the code has not drifted more than 20% since `
 That percentage, as well as the relationship between files-that-drift and files-that-should-be-updated, can be customized with a small configuration file.
 
 - Drift results and exit codes are **deterministic**.
-- It is does not change anything.
+- Checks do not modify files. Recording a review updates only `.catchmydrift-state.json`.
 - It does not try to understand what changed; it simply alerts that change has occurred.
 - It prints a brief report and returns a pass / fail exit code.
 - It can be used by people, agents, or CI.
@@ -31,11 +31,13 @@ That percentage, as well as the relationship between files-that-drift and files-
 ## Table of contents
 
 - [Install and run](#install-and-run)
+- [Resolve a drift warning](#resolve-a-drift-warning)
 - [Zero-configuration checks](#zero-configuration-checks)
 - [Configuration](#configuration)
 - [What counts as drift](#what-counts-as-drift)
 - [Review a file without editing it](#review-a-file-without-editing-it)
 - [Commands and exit status](#commands-and-exit-status)
+- [Update notifications](#update-notifications)
 
 ## Install and run
 
@@ -54,23 +56,7 @@ Then run it from the repository root:
 npx catchmydrift
 ```
 
-On `check` and `review`, the CLI checks the public npm registry for the latest
-release. If it is newer than the running version, a warning on stderr shows both
-versions and these upgrade options:
-
-```sh
-npm install --save-dev catchmydrift@latest  # Project dependency
-npm install --global catchmydrift@latest   # Global installation
-npx catchmydrift@latest                   # One-off run
-```
-
-The lookup has a 1.5-second deadline. Network errors, invalid responses, and
-timeouts are silently ignored; the warning never changes drift results or exit
-codes. It writes no cache or other files and never upgrades automatically.
-Help, version output, and programmatic `main`, `check`, and `review` calls stay
-offline. CI environments (`CI` set to a nonempty value other than `false` or `0`)
-skip the lookup. Set `CATCHMYDRIFT_NO_UPDATE_CHECK=1` to disable it elsewhere,
-including when using a private registry or working offline.
+The CLI may also report an available update; see [Update notifications](#update-notifications).
 
 For continuous integration, add a script such as:
 
@@ -85,6 +71,42 @@ For continuous integration, add a script such as:
 ```sh
 npm run check-drift
 ```
+
+## Resolve a drift warning
+
+A drift warning asks you to assess whether a watched file still matches its
+related content. It does not establish that the documentation is inaccurate.
+Start by reading the flagged file and the related changes since its
+[baseline](#what-counts-as-drift).
+
+If the documentation needs updating, edit it and commit the update along with
+any related changes you assessed. For example, after updating `docs/README.md`
+to describe changes in `docs/service.js`:
+
+```sh
+git add docs/README.md docs/service.js
+git commit -m "Document service changes"
+npx catchmydrift
+```
+
+The commit that updates the watched file becomes its new baseline. An
+uncommitted documentation edit does not reset the baseline.
+
+If the documentation is already accurate, commit the related changes and
+[record a review without editing the file](#review-a-file-without-editing-it).
+Then run the check again.
+
+For a repository with only `docs/README.md` watched and no subsequent related
+changes, either path ends with:
+
+```console
+$ npx catchmydrift
+Healthy: 1 watched file checked; no watched files exceed the 20.00% threshold.
+```
+
+A healthy check exits with status `0`. Other watched files may still need
+attention; repeat the assessment for any remaining warnings. The check measures
+change since the baseline; you assess whether the documentation is accurate.
 
 ## Zero-configuration checks
 
@@ -101,16 +123,16 @@ repository. Files ending in `.MD` are not selected by this default mode.
 
 ```sh
 # Check the current directory (the default)
-catchmydrift
+npx catchmydrift
 
 # `check` is optional and equivalent
-catchmydrift check
+npx catchmydrift check
 
 # Limit a check to a tracked repository subdirectory
-catchmydrift check docs
+npx catchmydrift check docs
 
 # Allow up to five percent drift before the check fails
-catchmydrift --threshold=5
+npx catchmydrift --threshold=5
 ```
 
 The positional root must be inside a Git repository. Output paths are relative
@@ -120,9 +142,32 @@ to that selected root.
 
 Creating `catchmydrift.config.json` in the selected root switches from the
 zero-configuration Markdown rules to the configured rules. The configuration
-has named groups of related files and one or more watch rules. All globs are
-root-relative POSIX globs; dotfiles are matched. `include` is required for a
-group and a watch rule; `exclude` is optional.
+has named groups of related files and one or more watch rules. A watch rule
+chooses the file to review; its groups choose the files whose changes count
+toward that review. All globs are root-relative POSIX globs; dotfiles are
+matched. `include` is required for a group and a watch rule; `exclude` is optional.
+
+To watch `README.md` for changes under `src/`, start with:
+
+```json
+{
+  "groups": {
+    "application": { "include": ["src/**"] }
+  },
+  "watch": [
+    { "include": ["README.md"], "groups": ["application"] }
+  ]
+}
+```
+
+The examples assume the selected paths are Git-tracked. Adapt the paths to your
+repository, removing wildcard includes for directories you do not have; unmatched
+wildcard includes are configuration errors. Only paths selected by `watch` are
+watched when configuration is present; other Markdown files are no longer discovered automatically.
+
+For documentation, agent guidance, and a skill that should be reviewed when
+application code changes, a fuller configuration adds exclusions and threshold
+overrides:
 
 ```json
 {
@@ -139,7 +184,7 @@ group and a watch rule; `exclude` is optional.
   },
   "watch": [
     {
-      "include": ["README.md", "docs/**/*.md"],
+      "include": ["README.md", "docs/**/*.md", "skills/code-review/SKILL.md"],
       "groups": ["application"],
       "threshold": 10
     },
@@ -151,8 +196,11 @@ group and a watch rule; `exclude` is optional.
 }
 ```
 
-In this example, documentation and `AGENTS.md` are watched explicitly. A
-watch rule can select arbitrary Git-tracked file types, not only Markdown.
+This example watches `README.md`, matching documentation, the named skill, and
+`AGENTS.md` explicitly. The `skills/**` pattern in the `agent-guidance` group
+also makes skill changes contribute drift to `AGENTS.md`; a group alone does
+not make its files watched. A watch rule can select arbitrary Git-tracked file
+types, not only Markdown.
 Groups are unioned when a rule names more than one group, so a related path is
 measured once even if several groups match it.
 
@@ -174,10 +222,10 @@ must remain inside the selected root:
 
 ```sh
 # Current directory is the selected root
-catchmydrift --config config/catchmydrift.json
+npx catchmydrift --config config/catchmydrift.json
 
 # Here `docs` is the selected root and patterns in its config are relative to docs/
-catchmydrift check docs --config docs/catchmydrift.config.json
+npx catchmydrift check docs --config docs/catchmydrift.config.json
 ```
 
 The package includes [catchmydrift.schema.json](catchmydrift.schema.json) for
@@ -187,12 +235,18 @@ copy the schema elsewhere.
 
 ## What counts as drift
 
-catchmydrift compares each related text file with the selected baseline and
-calculates:
+By default, the baseline is the last commit that changed the watched file.
+A newer [recorded review](#review-a-file-without-editing-it) moves the baseline
+forward; a later watched-file commit supersedes an older review.
+
+catchmydrift compares each related text file with that baseline and calculates:
 
 ```text
 (inserted text lines + deleted text lines) / current related text lines
 ```
+
+For example, replacing 12 lines among 100 current related text lines contributes
+12 deletions plus 12 insertions: `24 / 100 = 24%` drift.
 
 The current denominator includes tracked content in the working tree and
 index, so staged and unstaged changes are visible. A result equal to the
@@ -211,23 +265,56 @@ content, even if a configuration glob would otherwise select it.
 
 Use `review` after you have assessed a watched file against committed related
 content. It records the current `HEAD` commit SHA as that file's review baseline
-without editing the watched file:
+without editing the watched file.
+
+Before reviewing, commit all staged and unstaged changes in the selected watched
+file and its related tracked files. The example below assumes `docs/service.js`
+is the only changed related file and `docs/README.md` is already accurate.
 
 ```sh
 # Commit the changes you assessed first
 git add docs/service.js
 git commit -m "Update service"
-catchmydrift review docs/README.md
+npx catchmydrift review docs/README.md
+```
 
-# Share the review baseline
+A successful review prints:
+
+```text
+Approved: docs/README.md
+Commit .catchmydrift-state.json to share these review baselines with the repository.
+```
+
+Share the baseline and check again:
+
+```sh
 git add .catchmydrift-state.json
 git commit -m "Record documentation review"
+npx catchmydrift
+```
 
+The reviewed file now uses the recorded baseline. With no subsequent related
+changes it passes; other watched files can still fail. See the
+[healthy-check example](#resolve-a-drift-warning).
+
+If watched or related tracked content is still dirty, review exits with status
+`2` and prints this error followed by command usage:
+
+```text
+catchmydrift: Review requires committed watched and related content. Commit staged and unstaged changes first.
+```
+
+Use `git status` and `git diff` (including `git diff --cached` for staged changes)
+to inspect the relevant changes, commit them after assessment, and retry review.
+
+Other review examples:
+
+```sh
 # Review an arbitrary configured watched file
-catchmydrift review AGENTS.md --config catchmydrift.config.json
+npx catchmydrift review AGENTS.md --config catchmydrift.config.json
 
 # Review paths under a subdirectory root
-catchmydrift review README.md --root docs
+npx catchmydrift review README.md --root docs
 ```
 
 `review` accepts one or more exact, currently watched file paths. Its options
@@ -248,6 +335,8 @@ or dirty target leaves the entire batch unchanged. Paths outside the selected
 root, missing or unsafe paths, and files that are not currently watched are
 rejected.
 
+### Review state
+
 On success, the only file it may create or update is
 `.catchmydrift-state.json` in the selected root. It does not modify, touch,
 stage, or commit watched files or other content. The state is an unversioned
@@ -266,12 +355,10 @@ subdirectory. Each SHA must identify a commit reachable from the current
 The previous versioned snapshot format is unsupported; remove the old state
 file and run `review` again against committed content.
 
-Without a saved review, drift starts at the last commit that changed the
-watched file. With a saved review, it starts at the newer of that commit and
-the review commit. A later watched-file update therefore supersedes an older
-review. Saved reviews work locally immediately and travel to fresh clones when
-the state file is committed. Repeating a review at the same `HEAD` produces
-identical state.
+Saved reviews work locally immediately and travel to fresh clones when the
+state file is committed. Repeating a review at the same `HEAD` produces
+identical state. See [What counts as drift](#what-counts-as-drift) for baseline
+selection.
 
 Subsequent committed, staged, and unstaged related changes contribute ordinary
 percentage drift, subject to the threshold. Relationships always come from the
@@ -297,3 +384,23 @@ more file arguments; `check` uses its optional positional root.
 | `0`         | The check is healthy, or a review was recorded successfully.                                        |
 | `1`         | A watched file exceeded its threshold, is missing, or has invalid review state. |
 | `2`         | Command usage, root, configuration, or review-target validation failed.                             |
+
+## Update notifications
+
+On `check` and `review`, the CLI checks the public npm registry for the latest
+release. If it is newer than the running version, a warning on stderr shows both
+versions and these upgrade options:
+
+```sh
+npm install --save-dev catchmydrift@latest  # Project dependency
+npm install --global catchmydrift@latest   # Global installation
+npx catchmydrift@latest                   # One-off run
+```
+
+The lookup has a 1.5-second deadline. Network errors, invalid responses, and
+timeouts are silently ignored; the warning never changes drift results or exit
+codes. It writes no cache or other files and never upgrades automatically.
+Help, version output, and programmatic `main`, `check`, and `review` calls stay
+offline. CI environments (`CI` set to a nonempty value other than `false` or `0`)
+skip the lookup. Set `CATCHMYDRIFT_NO_UPDATE_CHECK=1` to disable it elsewhere,
+including when using a private registry or working offline.
