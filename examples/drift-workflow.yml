@@ -13,7 +13,7 @@ jobs:
         with:
           fetch-depth: 0 # Required for document and saved-review baselines
           persist-credentials: false
-      # Replace ACTION_COMMIT_SHA with the reviewed, full commit SHA after merge.
+      # Replace ACTION_COMMIT_SHA with the reviewed, full commit SHA to run.
       - uses: pmcelhaney/catchmydrift@ACTION_COMMIT_SHA
         id: drift
       - uses: actions/upload-artifact@v4
