@@ -76,7 +76,7 @@ test('zero-config inspection covers root, nested, and multiple lowercase Markdow
   assert.doesNotMatch(result.stdout, /README\.MD/);
 });
 
-test('directories without a tracked lowercase Markdown file are ignored', t => {
+test('directories without Markdown add no watched files but contribute to an ancestor watch', t => {
   const repository = createRepository(t, {
     'docs/README.md': '# Docs\n',
     'source/only-code.js': 'module.exports = 1;\n'
@@ -87,6 +87,16 @@ test('directories without a tracked lowercase Markdown file are ignored', t => {
 
   assertSucceeded(result);
   assert.doesNotMatch(result.stdout, /only-code\.js/);
+
+  writeFile(repository, 'README.md', '# Root\n');
+  commitAll(repository, 'add ancestor documentation');
+  writeFile(repository, 'source/only-code.js', 'module.exports = 3;\n');
+  const ancestorResult = runCli([], repository);
+
+  assertFailedForDrift(ancestorResult);
+  assert.match(ancestorResult.stdout, /\) README\.md\n/);
+  assert.match(ancestorResult.stdout, /2 watched files checked/);
+  assert.doesNotMatch(ancestorResult.stdout, /docs\/README\.md|only-code\.js/);
 });
 
 test('the checked content includes both staged and unstaged tracked changes', t => {

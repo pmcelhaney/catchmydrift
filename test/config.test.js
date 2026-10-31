@@ -206,6 +206,30 @@ test('threshold precedence is command line, then watch rule, then top-level conf
   assert.match(implicitDefault.stdout, /threshold 20\.00%/);
 });
 
+test('omitted and schema-supplied thresholds both allow 20 percent drift and reject higher drift', t => {
+  const config = baseConfig();
+  const originalLines = Array.from({ length: 20 }, (_, index) => `line ${index}\n`);
+  const repository = createRepository(t, {
+    'catchmydrift.config.json': `${JSON.stringify(config)}\n`,
+    'docs/guide.md': '# Guide\n',
+    'source/service.txt': originalLines.join('')
+  });
+  const withDefaults = structuredClone(config);
+  const validate = new Ajv2020({ useDefaults: true }).compile(configurationSchema);
+  assert.equal(validate(withDefaults), true);
+
+  for (const selectedConfig of [config, withDefaults]) {
+    writeConfig(repository, selectedConfig);
+    for (const [replacedLines, expectedStatus, expectedPercent] of [[2, 0, '20.00'], [3, 1, '30.00']]) {
+      const currentLines = originalLines.map((line, index) => index < replacedLines ? `changed ${index}\n` : line);
+      writeFile(repository, 'source/service.txt', currentLines.join(''));
+      const result = runCli([], repository);
+      assertStatus(result, expectedStatus);
+      assert.ok(result.stdout.includes(`${expectedPercent}% (threshold 20.00%) docs/guide.md`), result.stdout);
+    }
+  }
+});
+
 test('an exact missing watched literal is unhealthy while an unmatched watched wildcard is a configuration error', t => {
   const missingLiteral = baseConfig({
     watch: [{ include: ['docs/missing.md'], groups: ['related'] }]

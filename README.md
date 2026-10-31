@@ -1,6 +1,6 @@
 # catchmydrift
 
-<img src="docs/images/catch-my-drift-logo-b3-readme.png" alt="Catch My Drift — an angle-bracket kite with a curved tail" width="600">
+<img src="https://raw.githubusercontent.com/pmcelhaney/catchmydrift/main/docs/images/catch-my-drift-logo-b3-readme.png" alt="Catch My Drift — an angle-bracket kite with a curved tail" width="600">
 
 `catchmydrift` is a Git-backed command-line check that reminds busy engineers and their agents to keep documentation up to date.
 It works by making sure each context / documentation file is updated when the code files it supports have drifted.
@@ -80,6 +80,32 @@ related content. It does not establish that the documentation is inaccurate.
 Start by reading the flagged file and the related changes since its
 [baseline](#what-counts-as-drift).
 
+For example, from the repository root, with zero configuration and no saved
+review for `docs/README.md`, find its last-change commit and inspect the related
+changes:
+
+```sh
+baseline=$(git log -1 --format=%H -- docs/README.md)
+git diff --no-ext-diff --no-textconv "$baseline" -- docs/
+```
+
+This comparison includes committed changes since that baseline, plus staged and
+unstaged tracked changes. It still shows committed changes when plain `git diff`
+is empty. In zero-configuration mode, `docs/` is the related subtree for
+`docs/README.md`. With configuration, inspect the paths selected by that watched
+file's [related groups](#configuration) instead.
+
+If `.catchmydrift-state.json` contains a saved review for the watched file, compare
+that SHA with its last-change commit before choosing `baseline`. Run
+`git rev-list --topo-order HEAD`: whichever of those two SHAs appears first is
+the effective baseline. Set `baseline` to that full SHA before running the diff.
+State keys are repository-relative, including when checking a subdirectory.
+
+Use the diff to assess the documentation's claims. A changed service option or
+return value may require updating its documented usage; an internal refactor
+that preserves the documented behavior may leave the file accurate. Read enough
+of the related code to make that decision before recording a review.
+
 If the documentation needs updating, edit it and commit the update along with
 any related changes you assessed. For example, after updating `docs/README.md`
 to describe changes in `docs/service.js`:
@@ -113,14 +139,15 @@ change since the baseline; you assess whether the documentation is accurate.
 
 With no `catchmydrift.config.json` in the selected root, catchmydrift:
 
-- watches every Git-tracked file whose name ends in lowercase `.md`;
+- watches every Git-tracked file whose name ends in lowercase `.md`; and
 - relates each watched Markdown file to every Git-tracked file in the same
-  directory and its descendants; and
-- ignores directories that contain no tracked lowercase Markdown file.
+  directory and its descendants.
 
 For example, `docs/README.md` is related to all tracked files under `docs/`,
 while a root-level `README.md` is related to all tracked files in the
 repository. Files ending in `.MD` are not selected by this default mode.
+Directories without Markdown add no watched files of their own; their tracked
+content can still contribute drift to an ancestor's watched Markdown file.
 
 ```sh
 # Check the current directory (the default)
@@ -165,6 +192,13 @@ The examples assume the selected paths are Git-tracked. Adapt the paths to your
 repository, removing wildcard includes for directories you do not have; unmatched
 wildcard includes are configuration errors. Only paths selected by `watch` are
 watched when configuration is present; other Markdown files are no longer discovered automatically.
+
+After saving the minimal configuration, run `npx catchmydrift`. Confirm that
+`README.md` appears with `threshold 20.00%` and that the summary reports one
+watched file. A clean initial comparison can report `0.00%` drift. Changing a
+tracked text file under `src/` should change the reported percentage; the check fails
+only when that percentage exceeds the threshold. This lets you verify the
+relationship before adding more rules.
 
 For documentation, agent guidance, and a skill that should be reviewed when
 application code changes, a fuller configuration adds exclusions and threshold
@@ -388,7 +422,15 @@ more file arguments; `check` uses its optional positional root.
 
 ## GitHub Action
 
-Use this repository as a JavaScript Action to run the existing drift checks without installing npm dependencies in your project. It runs on Node 24 supplied by the Actions runner. The committed `dist/` bundle contains catchmydrift and its runtime dependencies. The small Action wrapper uses GitHub environment files directly for outputs and the job summary, so it does not need the Actions toolkit. A full Git history is required to find each watched file's last-change commit and resolve saved review SHAs. Set `fetch-depth: 0` on `actions/checkout`: zero means all history, whereas the default depth of one fetches only a single commit. The Action rejects shallow checkouts with setup instructions rather than calculating drift from an incomplete baseline.
+Run drift checks in GitHub Actions without installing npm dependencies in your
+project. Choose an installation method below, then inspect the report artifact
+to assess any warnings. Checks are advisory by default; set `fail-on-drift: 'true'`
+to make drift fail the job.
+
+A full Git history is required to find each watched file's last-change commit
+and resolve saved review SHAs. Set `fetch-depth: 0` on `actions/checkout`: zero
+means all history, whereas the default depth of one fetches only a single commit.
+The Action rejects shallow checkouts with setup instructions.
 
 ### Install with your AI
 
@@ -400,7 +442,9 @@ Install the catchmydrift GitHub Action in this repository. Follow the setup inst
 
 ### Install manually
 
-Copy [the example workflow](examples/drift-workflow.yml) to `.github/workflows/drift.yml`, replacing `ACTION_COMMIT_SHA` with the full reviewed commit SHA containing this Action. No Action release tag has been published as part of this change.
+Copy [the example workflow](https://github.com/pmcelhaney/catchmydrift/blob/main/examples/drift-workflow.yml)
+to `.github/workflows/drift.yml`, replacing `ACTION_COMMIT_SHA` with the full
+reviewed commit SHA containing this Action.
 
 ```yaml
 name: Documentation drift
@@ -439,11 +483,26 @@ By default this runs offline, does not fail for drift, and needs only `contents:
 
 Outputs: `drift-detected` (`true`/`false`) and `report-directory`. The directory contains `report.json` with `driftDetected` and per-file results: watched path, baseline SHA, drift percentage, threshold, and missing-file status. An infinite drift percentage is represented as `null` in JSON. The job summary shows whether drift was detected.
 
+When the report identifies drift, [resolve the warning](#resolve-a-drift-warning)
+by assessing the related changes, then updating the documentation or
+[recording a review](#review-a-file-without-editing-it) if it is already accurate.
+
 Invalid inputs, shallow history, unhealthy state/configuration, or failed analysis fail the step. Drift itself fails the step only with `fail-on-drift: 'true'`. The Action does not fetch history automatically; configure checkout before running it.
 
-### Sharing and maintaining the Action
+### Maintaining the Action
 
-After review and merge, another repository can consume `pmcelhaney/catchmydrift@<full-commit-SHA>` directly; a Marketplace listing is optional. Prefer full SHA pinning for reproducibility and supply-chain review. Maintainers may later publish a release and major-version tag such as `v1`; movable tags are convenient but can change behavior between runs. Publishing a release, moving tags, and accepting Marketplace agreements are separate maintainer actions, not performed by this PR. See [GitHub's JavaScript Action guide](https://docs.github.com/actions/tutorials/creating-a-javascript-action) and [publishing guide](https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace).
+This section is for contributors changing or distributing the Action. It runs
+on Node 24 supplied by the Actions runner. The committed `dist/` bundle contains
+catchmydrift and its runtime dependencies. The wrapper uses GitHub environment
+files directly for outputs and the job summary, without the Actions toolkit.
+
+Repositories can consume `pmcelhaney/catchmydrift@<full-commit-SHA>` directly;
+a Marketplace listing is optional. Use a full reviewed SHA for reproducibility.
+Maintainers can publish releases and major-version tags such as `v1`; movable
+tags can change behavior between runs. Publishing releases, moving tags, and
+accepting Marketplace agreements are separate maintainer tasks. See
+[GitHub's JavaScript Action guide](https://docs.github.com/actions/tutorials/creating-a-javascript-action)
+and [publishing guide](https://docs.github.com/en/actions/sharing-automations/creating-actions/publishing-actions-in-github-marketplace).
 
 For Action changes, run `npm ci`, `npm run build:action`, `npm test`, and `git diff --check`. Commit the regenerated `dist/` files alongside source. CI rebuilds the bundle and checks for differences, then exercises it from a separate consumer directory without `node_modules`. Tests use real temporary Git histories, including shallow and full-history consumer checkouts.
 
